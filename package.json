@@ -1,0 +1,23 @@
+{
+  "name": "squid_game_three_js",
+  "version": "1.0.0",
+  "description": "Online squid game",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Beast-Code9999/Squid_Game_Three_JS.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Beast-Code9999/Squid_Game_Three_JS/issues"
+  },
+  "homepage": "https://github.com/Beast-Code9999/Squid_Game_Three_JS#readme",
+  "dependencies": {
+    "concurrently": "^9.2.0"
+  }
+}
