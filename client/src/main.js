@@ -6,8 +6,16 @@ import { Renderer } from './core/renderer.js'
 import { Camera } from './core/camera.js'
 import { Player } from './game/player.js'
 import { Playground } from './game/playground.js'
-import { keys, setupControls, getMovementVector } from './core/controls.js'
 import { Doll } from './game/doll.js'
+import { keys, setupControls, getMovementVector } from './core/controls.js'
+import { 
+    gameState, 
+    startGame, 
+    checkMovement, 
+    updateDoll,
+    checkWinCondition,
+    checkTimeout
+} from './game/gameState.js'
 
 // Create camera and renderer
 const camera = Camera()
@@ -32,44 +40,32 @@ scene.add(directionalLight)
 const playground = Playground()
 scene.add(playground)
 
-// add doll
-const doll = Doll()
-doll.position.set(0, 0, -45)  // At the far end, past the finish line
-doll.rotation.y = Math.PI  // Face toward players initially
-scene.add(doll)
-
 // Create and add player
 const player = Player()
-player.position.set(0, 0, 40)  // Start at the back (position 0 in your diagram)
+player.position.set(0, 0, 40)
 scene.add(player)
 
-// Add a marker cube at the origin to see orientation
-const marker = new THREE.Mesh(
-    new THREE.BoxGeometry(2, 2, 2),
-    new THREE.MeshBasicMaterial({ color: 0x00ff00 })
-)
-marker.position.set(0, 1, 0)  // At origin, slightly up
-scene.add(marker)
+// Create and add doll
+const doll = Doll()
+doll.position.set(0, 0, -45)
+doll.rotation.y = Math.PI
+scene.add(doll)
 
-// Add another marker at the finish line
-const finishMarker = new THREE.Mesh(
-    new THREE.BoxGeometry(2, 10, 2),
-    new THREE.MeshBasicMaterial({ color: 0xff0000 })
-)
-finishMarker.position.set(0, 5, -50 + 1)  // At finish line
-scene.add(finishMarker)
-
-
-// Attach camera to player for first-person view
+// Attach camera to player
 player.add(camera)
-camera.position.set(0, 1.6, 0)  // Eye height
+camera.position.set(0, 1.6, 0)
 
-// Setup FPS controls - pass camera and player
+// Setup FPS controls
 setupControls(camera, player)
 
 // Movement settings
-const moveSpeed = 10  // Units per second
-const sprintMultiplier = 1.5
+const moveSpeed = 8
+const sprintMultiplier = 1.4
+
+// Start game after delay
+setTimeout(() => {
+    startGame()
+}, 2000)
 
 // Time tracking
 let previousTime = performance.now()
@@ -79,13 +75,62 @@ function animate() {
     requestAnimationFrame(animate)
     
     const currentTime = performance.now()
-    const deltaTime = (currentTime - previousTime) / 1000  // Convert to seconds
+    const deltaTime = (currentTime - previousTime) / 1000
     previousTime = currentTime
     
-    // Handle movement
-    const speed = keys.shift ? moveSpeed * sprintMultiplier : moveSpeed
-    const movement = getMovementVector(player, speed, deltaTime)
-    player.position.add(movement)
+    // Update doll rotation
+    updateDoll(doll, deltaTime)
+    
+    // Handle movement only if game is active
+    if (gameState.phase !== 'ended' && gameState.phase !== 'waiting') {
+        const speed = keys.shift ? moveSpeed * sprintMultiplier : moveSpeed
+        const movement = getMovementVector(player, speed, deltaTime)
+        player.position.add(movement)
+        
+        // Check for illegal movement
+        if (checkMovement(player.position)) {
+            console.log("💀 ELIMINATED! You moved during red light!")
+        }
+        
+        // Check win condition
+        if (checkWinCondition(player.position.z)) {
+            console.log("🎉 YOU WIN! Reached the finish line!")
+        }
+        
+        // Check timeout
+        if (checkTimeout()) {
+            console.log("⏰ TIME'S UP! Game Over!")
+        }
+    }
+    
+    // Visual feedback for game state
+    if (gameState.phase === 'ended') {
+        if (gameState.won) {
+            // Win state - golden sky
+            scene.background = new THREE.Color(0xffd700)
+            scene.fog = new THREE.Fog(0xffd700, 50, 200)
+        } else if (gameState.eliminated) {
+            // Death state - dark red sky
+            scene.background = new THREE.Color(0x8b0000)
+            scene.fog = new THREE.Fog(0x8b0000, 30, 150)
+        } else {
+            // Timeout - gray sky
+            scene.background = new THREE.Color(0x666666)
+            scene.fog = new THREE.Fog(0x666666, 50, 200)
+        }
+    } else if (gameState.phase === 'redLight' && !gameState.dollTurning) {
+        // Red light - must be frozen
+        scene.background = new THREE.Color(0xffaaaa)
+        scene.fog = new THREE.Fog(0xffaaaa, 80, 300)
+    } else if (gameState.phase === 'greenLight' && !gameState.dollTurning) {
+        // Green light - can move
+        scene.background = new THREE.Color(0x87CEEB)
+        scene.fog = new THREE.Fog(0x87CEEB, 100, 500)
+    } else {
+        // Turning phase - neutral
+        scene.background = new THREE.Color(0xddddaa)
+        scene.fog = new THREE.Fog(0xddddaa, 90, 400)
+    }
     
     renderer.render(scene, camera)
 }
@@ -99,5 +144,3 @@ window.addEventListener('resize', () => {
 
 // Start animation
 animate()
-
-
