@@ -7,6 +7,7 @@ import { Camera } from './core/camera.js'
 import { Player } from './game/player.js'
 import { Playground } from './game/playground.js'
 import { keys, setupControls, getMovementVector } from './core/controls.js'
+import { Doll } from './game/doll.js'
 
 // Create camera and renderer
 const camera = Camera()
@@ -30,6 +31,12 @@ scene.add(directionalLight)
 // Add playground
 const playground = Playground()
 scene.add(playground)
+
+// add doll
+const doll = Doll()
+doll.position.set(0, 0, -45)  // At the far end, past the finish line
+doll.rotation.y = Math.PI  // Face toward players initially
+scene.add(doll)
 
 // Create and add player
 const player = Player()
