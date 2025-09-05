@@ -33,15 +33,25 @@ scene.add(playground)
 
 // Create and add player
 const player = Player()
-player.position.set(0, 0, 85)  // Start at the back
+player.position.set(0, 0, 40)  // Start at the back (position 0 in your diagram)
 scene.add(player)
 
-// Temporary reference cube to see movement
-const refGeometry = new THREE.BoxGeometry(2, 2, 2)
-const refMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 })
-const refCube = new THREE.Mesh(refGeometry, refMaterial)
-refCube.position.set(0, 1, 70)  // Place it ahead of starting position
-scene.add(refCube)
+// Add a marker cube at the origin to see orientation
+const marker = new THREE.Mesh(
+    new THREE.BoxGeometry(2, 2, 2),
+    new THREE.MeshBasicMaterial({ color: 0x00ff00 })
+)
+marker.position.set(0, 1, 0)  // At origin, slightly up
+scene.add(marker)
+
+// Add another marker at the finish line
+const finishMarker = new THREE.Mesh(
+    new THREE.BoxGeometry(2, 10, 2),
+    new THREE.MeshBasicMaterial({ color: 0xff0000 })
+)
+finishMarker.position.set(0, 5, -50 + 1)  // At finish line
+scene.add(finishMarker)
+
 
 // Attach camera to player for first-person view
 player.add(camera)
