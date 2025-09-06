@@ -16,6 +16,7 @@ import {
     checkWinCondition,
     checkTimeout
 } from './game/gameState.js'
+import { TimerDisplay, updateTimerDisplay } from './game/timer.js'
 
 // Create camera and renderer
 const camera = Camera()
@@ -51,6 +52,11 @@ doll.position.set(0, 0, -45)
 doll.rotation.y = Math.PI
 scene.add(doll)
 
+// add timer
+const timer = TimerDisplay()
+timer.position.set(0, 10, -55)  // Behind the doll
+scene.add(timer)
+
 // Attach camera to player
 player.add(camera)
 camera.position.set(0, 1.6, 0)
@@ -80,6 +86,12 @@ function animate() {
     
     // Update doll rotation
     updateDoll(doll, deltaTime)
+
+    if (gameState.phase !== 'waiting' && gameState.phase !== 'ended') {
+        const timeElapsed = (Date.now() - gameState.startTime) / 1000
+        const timeRemaining = Math.max(0, 120 - timeElapsed)
+        updateTimerDisplay(timer, timeRemaining)
+    }
     
     // Handle movement only if game is active
     if (gameState.phase !== 'ended' && gameState.phase !== 'waiting') {
