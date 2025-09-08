@@ -163,19 +163,24 @@ function updateDoll(doll, deltaTime) {
    }
 }
 
+
 // Check if player has crossed finish line
 function checkWinCondition(playerZ) {
-   const finishZ = -GameConfig.field.depth * GameConfig.finishLine.zRatio
-   if (playerZ <= finishZ && !gameState.won) {
-       gameState.won = true
-       gameState.phase = 'ended'
-       if (dollAudio) {
-           dollAudio.pause()
-           dollAudio = null
-       }
-       return true
-   }
-   return false
+    const finishZ = -GameConfig.field.depth * GameConfig.finishLine.zRatio
+    const buffer = 1.5  // small buffer so player fully passes finish line
+
+    if (playerZ <= finishZ - buffer && !gameState.won) {
+        gameState.won = true
+        gameState.phase = 'ended'
+
+        // Stop doll audio if playing
+        if (dollAudio) {
+            dollAudio.pause()
+            dollAudio = null
+        }
+        return true
+    }
+    return false
 }
 
 // Check if the game timed out
