@@ -43,7 +43,7 @@ scene.add(playground)
 
 // Create and add player
 const player = Player()
-player.position.set(0, 0, 40)
+player.position.set(0, 0, 100)
 scene.add(player)
 
 // Create and add doll

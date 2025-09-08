@@ -31,7 +31,7 @@ function TimerDisplay() {
     
     // Digital display segments (we'll create digits)
     const digitGroups = []
-    const digitPositions = [-7, -3.5, 0.5, 4]  // MM:SS layout (colon in middle)
+    const digitPositions = [-5.5, -2.5, 2.5, 5.5]  // MM:SS layout (colon in middle)
     
     for (let i = 0; i < 4; i++) {
         const digitGroup = new THREE.Group()
@@ -47,14 +47,14 @@ function TimerDisplay() {
         new THREE.BoxGeometry(0.5, 0.5, 0.2),
         new THREE.MeshBasicMaterial({ color: 0xff0000, emissive: 0xff0000 })
     )
-    colonTop.position.set(-1.5, 11, 1)
+    colonTop.position.set(0, 11, 5)
     timerGroup.add(colonTop)
     
     const colonBottom = new THREE.Mesh(
         new THREE.BoxGeometry(0.5, 0.5, 0.2),
         new THREE.MeshBasicMaterial({ color: 0xff0000, emissive: 0xff0000 })
     )
-    colonBottom.position.set(-1.5, 9, 1)
+    colonBottom.position.set(0, 9, 1)
     timerGroup.add(colonBottom)
     
     // Store references for updating

@@ -5,7 +5,7 @@ function Playground() {
     const playground = new THREE.Group()
     
     // Main ground - rectangular field
-    const groundGeometry = new THREE.PlaneGeometry(60, 100)
+    const groundGeometry = new THREE.PlaneGeometry(60, 200)
     const groundMaterial = new THREE.MeshStandardMaterial({ 
         color: 0xd4b896,
         roughness: 0.9
