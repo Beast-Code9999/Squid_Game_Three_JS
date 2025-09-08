@@ -18,6 +18,7 @@ import {
 } from './game/gameState.js'
 import { TimerDisplay, updateTimerDisplay } from './game/timer.js'
 import { GameConfig } from './config/gameConfig.js'
+import { applyHeadBob } from './core/controls.js'
 
 // Create camera and renderer
 const camera = Camera()
@@ -58,9 +59,16 @@ const timer = TimerDisplay()
 timer.position.set(0, 10, -GameConfig.field.depth * GameConfig.timer.zRatio)
 scene.add(timer)
 
-// Attach camera to player
-player.add(camera)
-camera.position.set(0, 1.6, 0)
+// Create a rig (empty Object3D) that holds the camera
+const cameraRig = new THREE.Object3D()
+player.add(cameraRig)
+cameraRig.position.set(0, 1.6, 0) // eye level
+cameraRig.add(camera)
+camera.position.set(0, 0, 0) // reset camera local pos
+
+// // Attach camera to player
+// player.add(camera)
+// camera.position.set(0, 1.6, 0)
 
 // Setup FPS controls
 setupControls(camera, player)
@@ -100,7 +108,7 @@ function animate() {
 
     if (gameState.phase !== 'waiting' && gameState.phase !== 'ended') {
         const timeElapsed = (Date.now() - gameState.startTime) / 1000
-        const timeRemaining = Math.max(0, 60 - timeElapsed) // 60 second time
+        const timeRemaining = Math.max(0, 45 - timeElapsed) // 60 second time
         updateTimerDisplay(timer, timeRemaining)
 
         if (timeRemaining <= 0 && gameState.phase !== 'ended') {
@@ -115,6 +123,11 @@ function animate() {
         const speed = keys.shift ? moveSpeed * sprintMultiplier : moveSpeed
         const movement = getMovementVector(player, speed, deltaTime)
         player.position.add(movement)
+
+        const isMoving = keys.w || keys.a || keys.s || keys.d
+        const isRunning = keys.shift
+        applyHeadBob(camera, isMoving, isRunning, deltaTime)
+
         
         // Check for illegal movement
         if (checkMovement(player.position)) {
