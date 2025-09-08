@@ -17,6 +17,7 @@ import {
     checkTimeout
 } from './game/gameState.js'
 import { TimerDisplay, updateTimerDisplay } from './game/timer.js'
+import { GameConfig } from './config/gameConfig.js'
 
 // Create camera and renderer
 const camera = Camera()
@@ -43,18 +44,18 @@ scene.add(playground)
 
 // Create and add player
 const player = Player()
-player.position.set(0, 0, 100)
+player.position.set(0, 0, GameConfig.field.depth * GameConfig.player.startZRatio)
 scene.add(player)
 
 // Create and add doll
 const doll = Doll()
-doll.position.set(0, 0, -45)
+doll.position.set(0, 0, -GameConfig.field.depth * GameConfig.doll.zRatio)
 doll.rotation.y = Math.PI
 scene.add(doll)
 
 // add timer
 const timer = TimerDisplay()
-timer.position.set(0, 10, -55)  // Behind the doll
+timer.position.set(0, 10, -GameConfig.field.depth * GameConfig.timer.zRatio)
 scene.add(timer)
 
 // Attach camera to player
@@ -117,17 +118,17 @@ function animate() {
         
         // Check for illegal movement
         if (checkMovement(player.position)) {
-            console.log("💀 ELIMINATED! You moved during red light!")
+            console.log("ELIMINATED! You moved during red light!")
         }
         
         // Check win condition
         if (checkWinCondition(player.position.z)) {
-            console.log("🎉 YOU WIN! Reached the finish line!")
+            console.log("YOU WIN! Reached the finish line!")
         }
         
         // Check timeout
         if (checkTimeout()) {
-            console.log("⏰ TIME'S UP! Game Over!")
+            console.log("TIME'S UP! Game Over!")
         }
     }
     

@@ -1,3 +1,4 @@
+import { GameConfig } from '../config/gameConfig.js'
 // client/src/game/gameState.js
 
 // Central state of the game
@@ -164,7 +165,8 @@ function updateDoll(doll, deltaTime) {
 
 // Check if player has crossed finish line
 function checkWinCondition(playerZ) {
-   if (playerZ <= -35 && !gameState.won) {
+   const finishZ = -GameConfig.field.depth * GameConfig.finishLine.zRatio
+   if (playerZ <= finishZ && !gameState.won) {
        gameState.won = true
        gameState.phase = 'ended'
        if (dollAudio) {

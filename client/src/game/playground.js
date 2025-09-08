@@ -1,11 +1,12 @@
 // client/src/game/playground.js
 import * as THREE from 'three'
+import { GameConfig } from '../config/gameConfig.js'
 
 function Playground() {
     const playground = new THREE.Group()
     
-    // Main ground - rectangular field
-    const groundGeometry = new THREE.PlaneGeometry(60, 200)
+    // Ground
+    const groundGeometry = new THREE.PlaneGeometry(GameConfig.field.width, GameConfig.field.depth)
     const groundMaterial = new THREE.MeshStandardMaterial({ 
         color: 0xd4b896,
         roughness: 0.9
@@ -15,9 +16,8 @@ function Playground() {
     ground.receiveShadow = true
     playground.add(ground)
     
-    
-    // Finish line (horizontal line near the doll)
-    const lineGeometry = new THREE.PlaneGeometry(60, 1)
+    // Finish line
+    const lineGeometry = new THREE.PlaneGeometry(GameConfig.field.width, 1)
     const finishLineMaterial = new THREE.MeshStandardMaterial({ 
         color: 0xff0000,
         roughness: 0.8
@@ -25,7 +25,7 @@ function Playground() {
     const finishLine = new THREE.Mesh(lineGeometry, finishLineMaterial)
     finishLine.rotation.x = -Math.PI / 2
     finishLine.position.y = 0.01
-    finishLine.position.z = -35
+    finishLine.position.z = -GameConfig.field.depth * GameConfig.finishLine.zRatio
     playground.add(finishLine)
     
     return playground
