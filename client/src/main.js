@@ -68,10 +68,10 @@ setupControls(camera, player)
 const moveSpeed = 8
 const sprintMultiplier = 1.4
 
-// Start game after delay
-setTimeout(() => {
-    startGame()
-}, 2000)
+// // Start game after delay
+// setTimeout(() => {
+//     startGame()
+// }, 2000)
 
 // Time tracking
 let previousTime = performance.now()
@@ -87,10 +87,26 @@ function animate() {
     // Update doll rotation
     updateDoll(doll, deltaTime)
 
+    // check for movement
+    if (gameState.phase === 'waiting') {
+        const isMoving = keys.w || keys.a || keys.s || keys.d
+        if (isMoving) {
+            startGame()
+            gameState.startTime = Date.now() // start the timer
+            console.log("🏁 Game started!")
+        }
+    }
+
     if (gameState.phase !== 'waiting' && gameState.phase !== 'ended') {
         const timeElapsed = (Date.now() - gameState.startTime) / 1000
-        const timeRemaining = Math.max(0, 120 - timeElapsed)
+        const timeRemaining = Math.max(0, 60 - timeElapsed) // 60 second time
         updateTimerDisplay(timer, timeRemaining)
+
+        if (timeRemaining <= 0 && gameState.phase !== 'ended') {
+            gameState.phase = 'ended'
+            gameState.won = false
+            gameState.eliminated = false
+        }
     }
     
     // Handle movement only if game is active

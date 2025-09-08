@@ -47,7 +47,7 @@ function TimerDisplay() {
         new THREE.BoxGeometry(0.5, 0.5, 0.2),
         new THREE.MeshBasicMaterial({ color: 0xff0000, emissive: 0xff0000 })
     )
-    colonTop.position.set(0, 11, 5)
+    colonTop.position.set(0, 11, 1)
     timerGroup.add(colonTop)
     
     const colonBottom = new THREE.Mesh(
