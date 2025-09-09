@@ -120,5 +120,36 @@ function getMovementVector(player, speed, deltaTime) {
     return movement
 }
 
+let bobbingTime = 0
+
+function applyHeadBob(camera, isMoving, isRunning, deltaTime) {
+    if (!isMoving) {
+        bobbingTime = 0
+        camera.position.set(0, 0, 0)   // reset
+        camera.rotation.z = 0
+        return
+    }
+
+    // Speed of the bobbing cycle
+    const bobSpeed = isRunning ? 9 : 6
+    bobbingTime += deltaTime * bobSpeed
+
+    // Amplitudes (smaller for subtle effect)
+    const bobAmountY = isRunning ? 0.04 : 0.025   // vertical bounce
+    const bobAmountX = isRunning ? 0.02 : 0.012   // sideways sway
+    const tiltAmount = isRunning ? 0.01 : 0.006   // roll tilt
+
+    // Up/down: 1 full sine wave per step
+    camera.position.y = Math.abs(Math.sin(bobbingTime)) * bobAmountY
+
+    // Side sway: use cosine so it offsets from vertical
+    camera.position.x = Math.sin(bobbingTime * 2) * bobAmountX
+
+    // Roll: slight head tilt with the sway
+    camera.rotation.z = Math.sin(bobbingTime * 2) * tiltAmount
+}
+
+
+
 // Export so other files can use these
-export { keys, setupControls, getMovementVector }
+export { keys, setupControls, getMovementVector, applyHeadBob }
