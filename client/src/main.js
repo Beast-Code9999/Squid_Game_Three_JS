@@ -19,6 +19,8 @@ import {
 import { TimerDisplay, updateTimerDisplay } from './game/timer.js'
 import { GameConfig } from './config/gameConfig.js'
 import { applyHeadBob } from './core/controls.js'
+// import { Walls } from './game/walls.js'
+// import { checkBoundaries } from './game/boundaries.js'
 
 // Create camera and renderer
 const camera = Camera()
