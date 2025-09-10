@@ -6,3 +6,4 @@ Online squid game
 - create jumping controls
 - Add sounds to turning doll
 - add sound to clock ticking
+- add textures
