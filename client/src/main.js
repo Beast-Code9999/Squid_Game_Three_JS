@@ -126,36 +126,29 @@ function animate() {
     // Update doll rotation
     updateDoll(doll, deltaTime)
 
-    // === START PANEL LOGIC ===
+    // check for movement
     if (gameState.phase === 'waiting') {
         const isMoving = keys.w || keys.a || keys.s || keys.d
         if (isMoving) {
             startGame()
-            gameState.startTime = Date.now()
+            gameState.startTime = Date.now() // start the timer
             console.log("🏁 Game started!")
-            
-            // Hide start panel once
-            gameUI.hideStartPanel()
         }
     }
 
-    // === TIMER & TIMEOUT ===
     if (gameState.phase !== 'waiting' && gameState.phase !== 'ended') {
         const timeElapsed = (Date.now() - gameState.startTime) / 1000
-        const timeRemaining = Math.max(0, 45 - timeElapsed)
+        const timeRemaining = Math.max(0, 45 - timeElapsed) // 60 second time
         updateTimerDisplay(timer, timeRemaining)
 
         if (timeRemaining <= 0 && gameState.phase !== 'ended') {
             gameState.phase = 'ended'
             gameState.won = false
             gameState.eliminated = false
-
-            // Show end panel
-            gameUI.showEndPanel(false)
         }
     }
-
-    // === PLAYER MOVEMENT ===
+    
+    // Handle movement only if game is active
     if (gameState.phase !== 'ended' && gameState.phase !== 'waiting') {
         const speed = keys.shift ? moveSpeed * sprintMultiplier : moveSpeed
         const movement = getMovementVector(player, speed, deltaTime)
@@ -165,57 +158,63 @@ function animate() {
         const isRunning = keys.shift
         applyHeadBob(camera, isMoving, isRunning, deltaTime)
 
+        // Calculate new position
         const newPosition = {
             x: player.position.x + movement.x,
             y: player.position.y + movement.y,
             z: player.position.z + movement.z
         }
-
+        
+        // Apply boundary checking - THIS IS WHERE IT HAPPENS
         const clampedPosition = checkBoundaries(newPosition, walls.userData.boundaries)
         player.position.set(clampedPosition.x, clampedPosition.y, clampedPosition.z)
 
-        // Check illegal movement
-        if (checkMovement(player.position) && gameState.phase !== 'ended') {
+        
+        // Check for illegal movement
+        if (checkMovement(player.position)) {
             console.log("ELIMINATED! You moved during red light!")
-            gameState.phase = 'ended'
-            gameState.won = false
-            gameState.eliminated = true
-            gameUI.showEndPanel(false)
         }
-
+        
         // Check win condition
-        if (checkWinCondition(player.position.z) && gameState.phase !== 'ended') {
+        if (checkWinCondition(player.position.z)) {
             console.log("YOU WIN! Reached the finish line!")
-            gameState.phase = 'ended'
-            gameState.won = true
-            gameState.eliminated = false
-            gameUI.showEndPanel(true)
+        }
+        
+        // Check timeout
+        if (checkTimeout()) {
+            console.log("TIME'S UP! Game Over!")
         }
     }
-
-    // === VISUAL FEEDBACK ===
+    
+    // Visual feedback for game state
     if (gameState.phase === 'ended') {
         if (gameState.won) {
+            // Win state - golden sky
             scene.background = new THREE.Color(0xffd700)
             scene.fog = new THREE.Fog(0xffd700, 50, 200)
         } else if (gameState.eliminated) {
+            // Death state - dark red sky
             scene.background = new THREE.Color(0x8b0000)
             scene.fog = new THREE.Fog(0x8b0000, 30, 150)
         } else {
+            // Timeout - gray sky
             scene.background = new THREE.Color(0x666666)
             scene.fog = new THREE.Fog(0x666666, 50, 200)
         }
     } else if (gameState.phase === 'redLight' && !gameState.dollTurning) {
+        // Red light - must be frozen
         scene.background = new THREE.Color(0xffaaaa)
         scene.fog = new THREE.Fog(0xffaaaa, 80, 300)
     } else if (gameState.phase === 'greenLight' && !gameState.dollTurning) {
+        // Green light - can move
         scene.background = new THREE.Color(0x87CEEB)
         scene.fog = new THREE.Fog(0x87CEEB, 100, 500)
     } else {
+        // Turning phase - neutral
         scene.background = new THREE.Color(0xddddaa)
         scene.fog = new THREE.Fog(0xddddaa, 90, 400)
     }
-
+    
     renderer.render(scene, camera)
 }
 
