@@ -25,7 +25,7 @@ function Playground() {
     const finishLine = new THREE.Mesh(lineGeometry, finishLineMaterial)
     finishLine.rotation.x = -Math.PI / 2
     finishLine.position.y = 0.01
-    finishLine.position.z = -GameConfig.field.depth * GameConfig.finishLine.zRatio
+    finishLine.position.z = -GameConfig.field.depth * GameConfig.finishLine.zRatio + GameConfig.finishLine.zOffset
     playground.add(finishLine)
     
     return playground

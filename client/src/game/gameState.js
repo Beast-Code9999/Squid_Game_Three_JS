@@ -166,7 +166,7 @@ function updateDoll(doll, deltaTime) {
 
 // Check if player has crossed finish line
 function checkWinCondition(playerZ) {
-    const finishZ = -GameConfig.field.depth * GameConfig.finishLine.zRatio
+    const finishZ = -GameConfig.field.depth * GameConfig.finishLine.zRatio + GameConfig.finishLine.zOffset
     const buffer = 1.5  // small buffer so player fully passes finish line
 
     if (playerZ <= finishZ - buffer && !gameState.won) {

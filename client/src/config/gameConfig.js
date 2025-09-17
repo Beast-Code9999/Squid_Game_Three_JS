@@ -11,12 +11,18 @@ export const GameConfig = {
         zRatio: 0.225     // relative position along depth
     },
     finishLine: {
-        zRatio: 0.175     // relative position along depth
+        zRatio: 0.175,     // relative position along depth
+        width: 20,
+        height: 10,
+        yOffsetFromTop: 5,       // how far below the wall top
+        zOffsetFromWall: 0.6     // how far in front of wall
     },
     timer: {
-        zRatio: 0.275     // relative position along depth
+        zRatio: 0.275,     // relative position along depth
+
     },
     finishLine: {
-        zRatio: 0.175 // relative position along depth
+        zRatio: 0.175, // relative position along depth
+        zOffset: -40
     }
 }
