@@ -22,6 +22,7 @@ import { applyHeadBob } from './core/controls.js'
 import { Walls } from './game/walls.js'
 import { checkBoundaries } from './game/boundaries.js'
 import { GameUI3D } from './ui/gameUI3D.js'
+import { Bot, updateBot } from './game/bot.js'
 
 let popup = null
 
@@ -90,8 +91,8 @@ const gameUI = new GameUI3D(scene, camera)
 setupControls(camera, player)
 
 // Movement settings
-const moveSpeed = 50
-const sprintMultiplier = 1.4
+const moveSpeed = 4
+const sprintMultiplier = 1.2
 
 // // Start game after delay
 // setTimeout(() => {
@@ -104,16 +105,27 @@ let previousTime = performance.now()
 
 // Show start panel initially
 gameUI.showStartPanel()
-
+// needs to change
 const startListener = (e) => {
-  if (e.code === 'Space' || keys.w || keys.a || keys.s || keys.d) {
-    gameUI.hideStartPanel()
-    window.removeEventListener('keydown', startListener)
-    startGame()
-  }
+    if (e.code === 'Space' || keys.w || keys.a || keys.s || keys.d) {
+        gameUI.hideStartPanel()
+        window.removeEventListener('keydown', startListener)
+        startGame()
+    }
 }
 
 window.addEventListener('keydown', startListener)
+
+
+
+const bots = []
+
+// Create 3 bots for example
+for (let i = 0; i < 15; i++) {
+    const bot = Bot(`Bot ${i+1}`, 1 + Math.random() * 0.5)
+    scene.add(bot)
+    bots.push(bot)
+}
 
 // Animation loop
 function animate() {
@@ -125,6 +137,12 @@ function animate() {
     
     // Update doll rotation
     updateDoll(doll, deltaTime)
+
+    // Update each bot
+    const finishZ = -GameConfig.field.depth * GameConfig.finishLine.zRatio + GameConfig.finishLine.zOffset
+    bots.forEach(bot => {
+        updateBot(bot, deltaTime, finishZ, gameState)
+    })
 
     // check for movement
     if (gameState.phase === 'waiting') {
