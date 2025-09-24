@@ -1,5 +1,7 @@
 // client/src/networking/NetworkManager.js
 import { io } from 'socket.io-client'
+import { SOCKET_URL } from '../config/env.js'
+
 
 class NetworkManager {
   constructor() {
@@ -16,7 +18,7 @@ class NetworkManager {
   }
 
   connect() {
-    this.socket = io('http://localhost:3000')
+    this.socket = io(SOCKET_URL)
 
     this.socket.on('connect', () => {
       console.log('Connected to server')

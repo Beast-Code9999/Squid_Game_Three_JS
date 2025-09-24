@@ -20,7 +20,7 @@ function Bot(name = 'Bot', speedMultiplier = 1.2) {
     )
 
     bot.userData = {
-        speed: 6 * speedMultiplier,
+        speed: 4 * speedMultiplier,
         finished: false,
         eliminated: false,
         mistakeChance: 0.05
