@@ -196,9 +196,28 @@ function checkTimeout() {
     return false
 }
 
+// restart the game
+function resetGame() {
+    gameState.phase = 'waiting'
+    gameState.startTime = 0
+    gameState.phaseStartTime = 0
+    gameState.dollTurning = false
+    gameState.lastPlayerPosition = { x: 0, z: 0 }
+    gameState.eliminated = false
+    gameState.won = false
+    gameState.roundNumber = 0
+    
+    // Stop any playing audio
+    if (dollAudio) {
+        dollAudio.pause()
+        dollAudio = null
+    }
+}
+
 export { 
     gameState, 
     startGame, 
+    resetGame,
     checkMovement, 
     updateDoll, 
     checkWinCondition,

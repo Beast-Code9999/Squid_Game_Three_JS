@@ -4,10 +4,9 @@
   "description": "Online squid game",
   "main": "index.js",
   "scripts": {
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev": "concurrently \"cd server && npm run dev\" \"cd client && npm run dev\"",
     "dev:client": "cd client && npm run dev",
-    "dev:server": "cd server && npm run dev",
-    "install:all": "npm install && cd client && npm install && cd ../server && npm install"
+    "dev:server": "cd server && npm run dev"
   },
   "repository": {
     "type": "git",
