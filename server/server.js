@@ -1,4 +1,3 @@
-// server/server.js
 const express = require('express')
 const http = require('http')
 const { Server } = require('socket.io')
@@ -16,7 +15,6 @@ const io = new Server(server, {
   }
 })
 
-// Also add a test route
 app.get('/', (req, res) => {
   res.send('Squid Game Server Running!')
 })
@@ -25,20 +23,17 @@ const PORT = process.env.PORT || 3000
 
 // Game state
 const rooms = new Map()
-const ROOM_SIZE = 20 // Max players per room
+const ROOM_SIZE = 20
 
-// Player connected
 io.on('connection', (socket) => {
   console.log('Player connected:', socket.id)
 
   socket.on('join-game', (data) => {
-    // Find or create room
     let roomId = findAvailableRoom()
     if (!roomId) {
       roomId = createRoom()
     }
 
-    // Add player to room
     socket.join(roomId)
     const room = rooms.get(roomId)
     room.players.set(socket.id, {
@@ -47,19 +42,19 @@ io.on('connection', (socket) => {
       position: { x: 0, y: 0, z: 145 },
       rotation: { x: 0, y: 0, z: 0 },
       eliminated: false,
-      ready: false
+      ready: false,
+      completedRLGL: false,
+      tugReady: false
     })
 
     socket.roomId = roomId
 
-    // Send room info to player
     socket.emit('joined-room', {
       roomId,
       playerId: socket.id,
       players: Array.from(room.players.values())
     })
 
-    // Notify others in room
     socket.to(roomId).emit('player-joined', {
       id: socket.id,
       name: room.players.get(socket.id).name,
@@ -80,7 +75,6 @@ io.on('connection', (socket) => {
     
     player.ready = true
     
-    // Broadcast ready state
     io.to(socket.roomId).emit('player-ready-update', {
       id: socket.id,
       ready: true,
@@ -88,7 +82,6 @@ io.on('connection', (socket) => {
       totalPlayers: room.players.size
     })
     
-    // Check if all players are ready
     const allReady = Array.from(room.players.values()).every(p => p.ready)
     if (allReady && room.players.size >= 2 && !room.gameStarting) {
       startCountdown(socket.roomId)
@@ -123,11 +116,9 @@ io.on('connection', (socket) => {
     const player = room.players.get(socket.id)
     if (!player) return
 
-    // Update player position
     player.position = data.position
     player.rotation = data.rotation
 
-    // Broadcast to others in room
     socket.to(socket.roomId).emit('player-moved', {
       id: socket.id,
       position: data.position,
@@ -153,9 +144,151 @@ io.on('connection', (socket) => {
 
   socket.on('game-state', (state) => {
     if (!socket.roomId) return
-    
-    // Broadcast game state to room
     socket.to(socket.roomId).emit('game-state-update', state)
+  })
+
+  // ============= TUG OF WAR EVENTS =============
+
+  socket.on('level-complete', (data) => {
+    if (!socket.roomId) return
+    
+    const room = rooms.get(socket.roomId)
+    if (!room) return
+    
+    const player = room.players.get(socket.id)
+    if (!player) return
+    
+    if (data.level === 'rlgl') {
+      console.log(`Player ${socket.id} completed RLGL`)
+      player.completedRLGL = true
+      
+      const alivePlayers = Array.from(room.players.values()).filter(p => !p.eliminated)
+      const completedPlayers = alivePlayers.filter(p => p.completedRLGL)
+      
+      console.log(`${completedPlayers.length}/${alivePlayers.length} players completed RLGL`)
+      
+      socket.emit('wait-for-players', {
+        completed: completedPlayers.length,
+        total: alivePlayers.length
+      })
+      
+      io.to(socket.roomId).emit('rlgl-completion-update', {
+        completed: completedPlayers.length,
+        total: alivePlayers.length
+      })
+      
+      if (completedPlayers.length >= alivePlayers.length && alivePlayers.length >= 2 && !room.tugOfWarStarted) {
+        console.log('All players finished RLGL! Starting Tug of War...')
+        room.tugOfWarStarted = true
+        
+        setTimeout(() => {
+          io.to(socket.roomId).emit('all-players-ready-tug')
+          
+          setTimeout(() => {
+            startTugOfWarRace(socket.roomId)
+          }, 3000)
+        }, 2000)
+      }
+    }
+  })
+
+  socket.on('typing-progress', (data) => {
+    if (!socket.roomId) return
+    
+    const room = rooms.get(socket.roomId)
+    if (!room || !room.tugOfWarRace) return
+    
+    room.tugOfWarRace.playerProgress.set(socket.id, {
+      wordIndex: data.wordIndex,
+      percentage: data.percentage,
+      wpm: data.wpm || 0
+    })
+    
+    socket.to(socket.roomId).emit('race-progress', {
+      playerId: socket.id,
+      wordIndex: data.wordIndex,
+      percentage: data.percentage
+    })
+  })
+
+  socket.on('typing-complete', (data) => {
+    if (!socket.roomId) return
+    
+    const room = rooms.get(socket.roomId)
+    if (!room || !room.tugOfWarRace) return
+    
+    const race = room.tugOfWarRace
+    const player = room.players.get(socket.id)
+    
+    if (race.completions.some(c => c.playerId === socket.id)) return
+    
+    const completion = {
+      playerId: socket.id,
+      name: player ? player.name : 'Unknown',
+      time: data.time,
+      wpm: data.wpm,
+      finishTime: Date.now(),
+      place: race.completions.length + 1
+    }
+    
+    race.completions.push(completion)
+    
+    console.log(`${completion.name} finished in place ${completion.place}`)
+    
+    io.to(socket.roomId).emit('player-finished-typing', completion)
+    
+    if (race.completions.length === 1) {
+      console.log(`${completion.name} WON the race!`)
+      setTimeout(() => {
+        endTugOfWarRace(socket.roomId)
+      }, 5000)
+    }
+  })
+
+  socket.on('tug-ready', () => {
+    if (!socket.roomId) return
+    
+    const room = rooms.get(socket.roomId)
+    if (!room || !room.tugOfWarRace) return
+    
+    const player = room.players.get(socket.id)
+    if (!player) return
+    
+    player.tugReady = true
+    
+    const alivePlayers = Array.from(room.players.values()).filter(p => !p.eliminated)
+    const readyPlayers = alivePlayers.filter(p => p.tugReady)
+    
+    console.log(`${readyPlayers.length}/${alivePlayers.length} players ready for Tug of War`)
+    
+    io.to(socket.roomId).emit('tug-ready-update', {
+      ready: readyPlayers.length,
+      total: alivePlayers.length
+    })
+    
+    if (readyPlayers.length >= alivePlayers.length) {
+      io.to(socket.roomId).emit('tug-typing-start')
+    }
+  })
+
+  socket.on('tug-not-ready', () => {
+    if (!socket.roomId) return
+    
+    const room = rooms.get(socket.roomId)
+    if (!room) return
+    
+    const player = room.players.get(socket.id)
+    if (!player) return
+    
+    player.tugReady = false
+    
+    const alivePlayers = Array.from(room.players.values()).filter(p => !p.eliminated)
+    const readyPlayers = alivePlayers.filter(p => p.tugReady)
+    
+    io.to(socket.roomId).emit('tug-ready-update', {
+      ready: readyPlayers.length,
+      total: alivePlayers.length
+    })
   })
 
   socket.on('disconnect', () => {
@@ -166,12 +299,10 @@ io.on('connection', (socket) => {
 
     room.players.delete(socket.id)
     
-    // Notify others
     socket.to(socket.roomId).emit('player-left', {
       id: socket.id
     })
 
-    // Clean up empty rooms
     if (room.players.size === 0) {
       rooms.delete(socket.roomId)
     }
@@ -196,7 +327,9 @@ function createRoom() {
     players: new Map(),
     gameStarted: false,
     gameStarting: false,
-    gameState: 'waiting'
+    gameState: 'waiting',
+    tugOfWarStarted: false,
+    tugOfWarRace: null
   })
   return roomId
 }
@@ -207,7 +340,6 @@ function startCountdown(roomId) {
   
   room.gameStarting = true
   
-  // 3 second countdown
   let count = 3
   
   const countdownInterval = setInterval(() => {
@@ -216,7 +348,6 @@ function startCountdown(roomId) {
     if (count === 0) {
       clearInterval(countdownInterval)
       
-      // Start the game for everyone simultaneously
       room.gameStarted = true
       room.gameStartTime = Date.now()
       
@@ -224,7 +355,6 @@ function startCountdown(roomId) {
         startTime: room.gameStartTime
       })
       
-      // Reset ready states
       room.players.forEach(player => {
         player.ready = false
       })
@@ -234,6 +364,64 @@ function startCountdown(roomId) {
     
     count--
   }, 1000)
+}
+
+function startTugOfWarRace(roomId) {
+  const room = rooms.get(roomId)
+  if (!room) return
+  
+  const paragraphIndex = Math.floor(Math.random() * 10)
+  
+  console.log(`Starting Tug of War race in room ${roomId} with paragraph ${paragraphIndex}`)
+  
+  room.players.forEach(player => {
+    player.tugReady = false
+  })
+  
+  room.tugOfWarRace = {
+    active: true,
+    startTime: Date.now(),
+    paragraphIndex: paragraphIndex,
+    playerProgress: new Map(),
+    completions: []
+  }
+  
+  io.to(roomId).emit('tug-race-start', {
+    paragraphIndex: paragraphIndex,
+    startTime: room.tugOfWarRace.startTime
+  })
+}
+
+function endTugOfWarRace(roomId) {
+  const room = rooms.get(roomId)
+  if (!room || !room.tugOfWarRace) return
+  
+  const race = room.tugOfWarRace
+  race.active = false
+  
+  if (race.completions.length === 0) {
+    console.log('Race ended with no completions')
+    return
+  }
+  
+  const winner = race.completions[0]
+  
+  console.log(`Race ended. Winner: ${winner.name}`)
+  
+  room.players.forEach((player, id) => {
+    if (id !== winner.playerId) {
+      player.eliminated = true
+    }
+  })
+  
+  io.to(roomId).emit('tug-race-end', {
+    winner: winner,
+    results: race.completions,
+    eliminatedCount: room.players.size - 1
+  })
+  
+  room.tugOfWarRace = null
+  room.tugOfWarStarted = false
 }
 
 server.listen(PORT, () => {

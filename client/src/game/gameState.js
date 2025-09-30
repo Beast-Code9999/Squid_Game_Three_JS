@@ -1,5 +1,5 @@
-import { GameConfig } from '../config/gameConfig.js'
 // client/src/game/gameState.js
+import { GameConfig } from '../config/gameConfig.js'
 
 // Central state of the game
 let gameState = {

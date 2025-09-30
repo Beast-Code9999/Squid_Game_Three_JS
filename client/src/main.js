@@ -26,10 +26,16 @@ import { Bot, updateBot } from './game/bot.js'
 import { NetworkManager } from './networking/NetworkManager.js'
 import { MultiplayerPlayer } from './game/MultiplayerPlayer.js'
 import { createReadyUI } from './ui/ReadyUI.js'
+import { transitionToTugOfWar } from './game/levelTransition.js'
+import { createRLGLInstructions } from './ui/InstructionsUI.js'
+import { removeTugReadyUI } from './ui/TugReadyUI.js'
 
 // Create camera and renderer
 const camera = Camera()
 const renderer = Renderer()
+
+// Current level tracking
+let currentLevel = 'rlgl'
 
 // Add walls
 const walls = Walls()
@@ -63,6 +69,81 @@ scene.add(player)
 const networkManager = new NetworkManager()
 networkManager.connect()
 
+// RLGL Completion tracking
+networkManager.onWaitForPlayers = (data) => {
+    console.log(`Waiting... ${data.completed}/${data.total} players finished`)
+    showWaitingOverlay(data.completed, data.total)
+}
+
+networkManager.onRLGLCompletionUpdate = (data) => {
+    console.log(`Progress: ${data.completed}/${data.total} players finished`)
+    updateWaitingOverlay(data.completed, data.total)
+}
+
+networkManager.onAllPlayersReadyTug = () => {
+    console.log('All players finished! Transitioning to Tug of War...')
+    hideWaitingOverlay()
+    
+    setTimeout(() => {
+        currentLevel = 'tug'
+        transitionToTugOfWar(scene, player, walls, playground, doll, timer, bots, camera, networkManager)
+    }, 1000)
+}
+
+// Tug of War network callbacks
+networkManager.onTugRaceStart = (data) => {
+    console.log('Race starting with paragraph index:', data.paragraphIndex)
+    
+    import('./game/tugofwar/paragraphs.js').then(module => {
+        const paragraphs = module.tugOfWarParagraphs || []
+        const paragraph = paragraphs[data.paragraphIndex]
+        
+        if (paragraph) {
+            window.tugParagraph = paragraph
+            console.log('Paragraph loaded, waiting for all players to ready up...')
+        } else {
+            console.error('Paragraph not found at index:', data.paragraphIndex)
+        }
+    })
+}
+
+networkManager.onRaceProgress = (data) => {
+    console.log(`Player ${data.playerId} is at ${data.percentage.toFixed(1)}%`)
+}
+
+networkManager.onPlayerFinished = (data) => {
+    console.log(`${data.name} finished in place ${data.place}!`)
+}
+
+networkManager.onTugRaceEnd = (data) => {
+    console.log('Race ended! Winner:', data.winner.name)
+    
+    setTimeout(() => {
+        alert(`🏆 WINNER: ${data.winner.name}\n⏱️ Time: ${data.winner.time.toFixed(2)}s\n⚡ WPM: ${data.winner.wpm}\n\n${data.eliminatedCount} players eliminated`)
+    }, 1000)
+}
+
+networkManager.onTugReadyUpdate = (data) => {
+    const tugStatus = document.getElementById('tug-ready-status')
+    if (tugStatus) {
+        tugStatus.textContent = `${data.ready}/${data.total} players ready`
+    }
+}
+
+networkManager.onTugTypingStart = () => {
+    console.log('All players ready! Starting typing race...')
+    
+    removeTugReadyUI()
+    
+    if (window.tugParagraph) {
+        setTimeout(() => {
+            import('./game/tugofwar/typingUI.js').then(ui => {
+                ui.startTyping(window.tugParagraph)
+            })
+        }, 1000)
+    }
+}
+
 // Store network players
 const networkPlayers = new Map()
 
@@ -75,6 +156,7 @@ const POSITION_THRESHOLD = 0.1
 const readyUI = createReadyUI()
 let isReady = false
 let gameStartedFromNetwork = false
+let hasShownInstructions = false
 
 // Create and add doll
 const doll = Doll()
@@ -101,17 +183,21 @@ const gameUI = new GameUI3D(scene, camera)
 setupControls(camera, player)
 
 // Movement settings
-const moveSpeed = 4
+const moveSpeed = 70.5
 const sprintMultiplier = 1.2
 
 // Time tracking
 let previousTime = performance.now()
 
-// Hide start panel for multiplayer (using ready system instead)
-// gameUI.showStartPanel()
+// Show instructions immediately on load
+createRLGLInstructions().then(() => {
+    hasShownInstructions = true
+})
 
 // Setup ready button
 readyUI.readyButton.addEventListener('click', () => {
+  if (!hasShownInstructions) return
+  
   isReady = !isReady
   
   if (isReady) {
@@ -155,10 +241,8 @@ networkManager.onGameStart = (data) => {
   gameUI.hideStartPanel()
   readyUI.container.style.display = 'none'
   
-  // Start game for everyone at the same time
   gameStartedFromNetwork = true
   startGame()
-  // Use server's synchronized start time
   gameState.startTime = data.startTime
 }
 
@@ -178,63 +262,63 @@ function animate() {
     const deltaTime = (currentTime - previousTime) / 1000
     previousTime = currentTime
     
-    // Update doll rotation
-    updateDoll(doll, deltaTime)
+    // Only update RLGL elements if we're in RLGL
+    if (currentLevel === 'rlgl') {
+        updateDoll(doll, deltaTime)
 
-    // Update each bot
-    const finishZ = -GameConfig.field.depth * GameConfig.finishLine.zRatio + GameConfig.finishLine.zOffset
-    bots.forEach(bot => {
-        updateBot(bot, deltaTime, finishZ, gameState)
-    })
+        const finishZ = -GameConfig.field.depth * GameConfig.finishLine.zRatio + GameConfig.finishLine.zOffset
+        bots.forEach(bot => {
+            updateBot(bot, deltaTime, finishZ, gameState)
+        })
+    }
 
-    // Update network players
-    networkManager.players.forEach((playerData, playerId) => {
-        if (!networkPlayers.has(playerId)) {
-            // Create new player mesh
-            const newPlayer = MultiplayerPlayer(playerData.name)
-            newPlayer.position.set(
-                playerData.position.x,
-                playerData.position.y,
-                playerData.position.z
-            )
-            scene.add(newPlayer)
-            networkPlayers.set(playerId, newPlayer)
-        } else {
-            // Update existing player position with smoothing
-            const playerMesh = networkPlayers.get(playerId)
-            playerMesh.position.lerp(
-                new THREE.Vector3(
+    // Update network players (only in RLGL, hide in Tug of War)
+    if (currentLevel === 'rlgl') {
+        networkManager.players.forEach((playerData, playerId) => {
+            if (!networkPlayers.has(playerId)) {
+                const newPlayer = MultiplayerPlayer(playerData.name)
+                newPlayer.position.set(
                     playerData.position.x,
                     playerData.position.y,
                     playerData.position.z
-                ),
-                0.1  // Smoothing factor
-            )
-            
-            if (playerData.rotation) {
-                playerMesh.rotation.y = playerData.rotation.y
+                )
+                scene.add(newPlayer)
+                networkPlayers.set(playerId, newPlayer)
+            } else {
+                const playerMesh = networkPlayers.get(playerId)
+                playerMesh.position.lerp(
+                    new THREE.Vector3(
+                        playerData.position.x,
+                        playerData.position.y,
+                        playerData.position.z
+                    ),
+                    0.1
+                )
+                
+                if (playerData.rotation) {
+                    playerMesh.rotation.y = playerData.rotation.y
+                }
+                
+                if (playerData.eliminated) {
+                    playerMesh.visible = false
+                }
             }
-            
-            // Hide eliminated players
-            if (playerData.eliminated) {
-                playerMesh.visible = false
+        })
+
+        networkPlayers.forEach((playerMesh, playerId) => {
+            if (!networkManager.players.has(playerId)) {
+                scene.remove(playerMesh)
+                networkPlayers.delete(playerId)
             }
-        }
-    })
+        })
+    } else if (currentLevel === 'tug') {
+        networkPlayers.forEach((playerMesh) => {
+            playerMesh.visible = false
+        })
+    }
 
-    // Remove disconnected players
-    networkPlayers.forEach((playerMesh, playerId) => {
-        if (!networkManager.players.has(playerId)) {
-            scene.remove(playerMesh)
-            networkPlayers.delete(playerId)
-        }
-    })
-
-    // Don't allow movement-based game start anymore
-    // Game only starts from synchronized network signal
-
-    // Update timer
-    if (gameState.phase !== 'waiting' && gameState.phase !== 'ended') {
+    // Update timer (only for RLGL)
+    if (currentLevel === 'rlgl' && gameState.phase !== 'ended' && gameState.phase !== 'waiting' && gameState.phase !== 'waiting-for-players') {
         const timeElapsed = (Date.now() - gameState.startTime) / 1000
         const timeRemaining = Math.max(0, 45 - timeElapsed)
         updateTimerDisplay(timer, timeRemaining)
@@ -246,19 +330,17 @@ function animate() {
         }
     }
     
-    // Handle movement only if game is active
-    if (gameState.phase !== 'ended' && gameState.phase !== 'waiting') {
+    // Handle movement only in RLGL (and not if waiting for players)
+    if (currentLevel === 'rlgl' && gameState.phase !== 'ended' && gameState.phase !== 'waiting' && gameState.phase !== 'waiting-for-players') {
         const speed = keys.shift ? moveSpeed * sprintMultiplier : moveSpeed
         const movement = getMovementVector(player, speed, deltaTime)
 
-        // Calculate new position
         const newPosition = {
             x: player.position.x + movement.x,
             y: player.position.y + movement.y,
             z: player.position.z + movement.z
         }
         
-        // Apply boundary checking
         const clampedPosition = checkBoundaries(newPosition, walls.userData.boundaries)
         player.position.set(clampedPosition.x, clampedPosition.y, clampedPosition.z)
 
@@ -266,7 +348,6 @@ function animate() {
         const isRunning = keys.shift
         applyHeadBob(camera, isMoving, isRunning, deltaTime)
 
-        // Send position to server if changed
         const positionChanged = 
             Math.abs(player.position.x - lastSentPosition.x) > POSITION_THRESHOLD ||
             Math.abs(player.position.y - lastSentPosition.y) > POSITION_THRESHOLD ||
@@ -281,20 +362,21 @@ function animate() {
             lastSentRotation = { ...player.rotation }
         }
         
-        // Check for illegal movement
         if (checkMovement(player.position)) {
             networkManager.sendEliminated()
         }
         
-        // Check win condition
-        checkWinCondition(player.position.z)
+        if (checkWinCondition(player.position.z)) {
+            networkManager.sendLevelComplete('rlgl')
+            gameState.phase = 'waiting-for-players'
+            console.log('Finished RLGL! Waiting for other players...')
+        }
         
-        // Check timeout
         checkTimeout()
     }
     
     // Visual feedback for game state
-    if (gameState.phase === 'ended') {
+    if (currentLevel === 'rlgl' && gameState.phase === 'ended') {
         if (gameState.won) {
             scene.background = new THREE.Color(0xffd700)
             scene.fog = new THREE.Fog(0xffd700, 50, 200)
@@ -305,15 +387,17 @@ function animate() {
             scene.background = new THREE.Color(0x666666)
             scene.fog = new THREE.Fog(0x666666, 50, 200)
         }
-    } else if (gameState.phase === 'redLight' && !gameState.dollTurning) {
-        scene.background = new THREE.Color(0xffaaaa)
-        scene.fog = new THREE.Fog(0xffaaaa, 80, 300)
-    } else if (gameState.phase === 'greenLight' && !gameState.dollTurning) {
-        scene.background = new THREE.Color(0x87CEEB)
-        scene.fog = new THREE.Fog(0x87CEEB, 100, 500)
-    } else {
-        scene.background = new THREE.Color(0xddddaa)
-        scene.fog = new THREE.Fog(0xddddaa, 90, 400)
+    } else if (currentLevel === 'rlgl') {
+        if (gameState.phase === 'redLight' && !gameState.dollTurning) {
+            scene.background = new THREE.Color(0xffaaaa)
+            scene.fog = new THREE.Fog(0xffaaaa, 80, 300)
+        } else if (gameState.phase === 'greenLight' && !gameState.dollTurning) {
+            scene.background = new THREE.Color(0x87CEEB)
+            scene.fog = new THREE.Fog(0x87CEEB, 100, 500)
+        } else {
+            scene.background = new THREE.Color(0xddddaa)
+            scene.fog = new THREE.Fog(0xddddaa, 90, 400)
+        }
     }
     
     renderer.render(scene, camera)
@@ -326,5 +410,57 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight)
 })
 
-// Start animation
+// Debug key
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'T') {
+        currentLevel = 'tug'
+        transitionToTugOfWar(scene, player, walls, playground, doll, timer, bots, camera, networkManager)
+    }
+})
+
+// Waiting overlay UI
+let waitingOverlay = null
+
+function showWaitingOverlay(completed, total) {
+    if (waitingOverlay) return
+    
+    waitingOverlay = document.createElement('div')
+    waitingOverlay.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.9);
+        padding: 40px 60px;
+        border-radius: 15px;
+        color: white;
+        font-family: monospace;
+        text-align: center;
+        z-index: 1000;
+        border: 3px solid #4ecdc4;
+    `
+    
+    waitingOverlay.innerHTML = `
+        <h2 style="margin: 0 0 20px 0; font-size: 32px; color: #4ecdc4;">You Finished!</h2>
+        <p style="margin: 0; font-size: 20px;">Waiting for other players...</p>
+        <p id="waiting-count" style="margin: 10px 0 0 0; font-size: 24px; font-weight: bold;">${completed}/${total} completed</p>
+    `
+    
+    document.body.appendChild(waitingOverlay)
+}
+
+function updateWaitingOverlay(completed, total) {
+    const countElement = document.getElementById('waiting-count')
+    if (countElement) {
+        countElement.textContent = `${completed}/${total} completed`
+    }
+}
+
+function hideWaitingOverlay() {
+    if (waitingOverlay && waitingOverlay.parentNode) {
+        waitingOverlay.parentNode.removeChild(waitingOverlay)
+        waitingOverlay = null
+    }
+}
+
 animate()
