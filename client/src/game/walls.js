@@ -4,16 +4,25 @@ import { GameConfig } from '../config/gameConfig.js'
 
 function Walls() {
     const walls = new THREE.Group()
-    
+
     const wallHeight = 20
     const wallThickness = 1
-    
+
+    // Load the image texture
+    const textureLoader = new THREE.TextureLoader()
+    const wallTexture = textureLoader.load('../../textures/wall/wall.jpg')
+
+    // Horizontal wrapping only
+    wallTexture.wrapS = THREE.RepeatWrapping
+    wallTexture.wrapT = THREE.ClampToEdgeWrapping
+    wallTexture.repeat.set(4, 1) // repeat horizontally 4 times, vertically once
+
     const wallMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0xcc9966,
+        map: wallTexture,
         roughness: 0.9,
         side: THREE.DoubleSide
     })
-    
+
     // Left wall
     const sideWallGeometry = new THREE.BoxGeometry(wallThickness, wallHeight, GameConfig.field.depth)
     const leftWall = new THREE.Mesh(sideWallGeometry, wallMaterial)
@@ -21,15 +30,15 @@ function Walls() {
     leftWall.castShadow = true
     leftWall.receiveShadow = true
     walls.add(leftWall)
-    
+
     // Right wall
     const rightWall = new THREE.Mesh(sideWallGeometry, wallMaterial)
     rightWall.position.set(GameConfig.field.width/2, wallHeight/2, 0)
     rightWall.castShadow = true
     rightWall.receiveShadow = true
     walls.add(rightWall)
-    
-    // Back wall (behind players)
+
+    // Back wall
     const backWallGeometry = new THREE.BoxGeometry(GameConfig.field.width, wallHeight, wallThickness)
     const backWall = new THREE.Mesh(backWallGeometry, wallMaterial)
     backWall.position.set(0, wallHeight/2, GameConfig.field.depth/2)
@@ -37,14 +46,14 @@ function Walls() {
     backWall.receiveShadow = true
     walls.add(backWall)
 
-    // Front wall (near the doll) - one continuous wall
+    // Front wall
     const frontWallGeometry = new THREE.BoxGeometry(GameConfig.field.width, wallHeight, wallThickness)
     const frontWall = new THREE.Mesh(frontWallGeometry, wallMaterial)
     frontWall.position.set(0, wallHeight/2, -GameConfig.field.depth/2)
     frontWall.castShadow = true
     frontWall.receiveShadow = true
     walls.add(frontWall)
-    
+
     // Store boundaries for collision detection
     walls.userData = {
         boundaries: {
@@ -54,7 +63,7 @@ function Walls() {
             maxZ: GameConfig.field.depth/2 - 2
         }
     }
-    
+
     return walls
 }
 

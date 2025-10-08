@@ -14,13 +14,14 @@ const sun = new THREE.Vector3()
 
 // Brighter, clearer sky for better visibility
 const effectController = {
-    turbidity: 10,      // Less haze
-    rayleigh: 2,        // More blue
-    mieCoefficient: 0.005,
-    mieDirectionalG: 0.8,
-    elevation: 35,      // Higher sun = more light
-    azimuth: 180,
-    exposure: 0.6       // Brighter
+turbidity: 2,
+rayleigh: 1.2,
+mieCoefficient: 0.005,
+mieDirectionalG: 0.7,
+elevation: 10,
+azimuth: 90,
+exposure: 0.4
+
 }
 
 const uniforms = sky.material.uniforms
