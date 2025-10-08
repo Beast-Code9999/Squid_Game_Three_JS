@@ -1,31 +1,29 @@
 // client/src/game/gameState.js
 import { GameConfig } from '../config/gameConfig.js'
 
-// Central state of the game
 let gameState = {
-    phase: 'waiting',           // Current phase: 'waiting', 'greenLight', 'redLight', 'ended'
-    startTime: 0,               // Game start timestamp
-    phaseStartTime: 0,          // Current phase start timestamp
-    dollTurning: false,         // True while doll is rotating
-    lastPlayerPosition: { x: 0, z: 0 }, // Track last player position
-    eliminated: false,          // True if player is caught moving
-    won: false,                 // True if player wins
-    roundNumber: 0              // Current round count (used for difficulty scaling)
+    phase: 'waiting',
+    startTime: 0,
+    phaseStartTime: 0,
+    dollTurning: false,
+    turnStartTime: 0,
+    turnDuration: 1.5,
+    lastPlayerPosition: { x: 0, z: 0 },
+    eliminated: false,
+    won: false,
+    roundNumber: 0
 }
 
-// Timing configuration for lights, audio, and game length
 const timings = {
-    redLightDuration: 3000,     // Base red light duration (ms)
-    turnSpeed: 6,               // Speed of doll rotation
-    gameTimeout: 120000,        // Max game duration (ms)
-    initialAudioSpeed: 0.8,     // Starting song playback speed
-    speedIncrement: 0.25        // Unused here, but intended increment per round
+    redLightDuration: 3000,
+    turnSpeed: 6,
+    gameTimeout: 120000,
+    initialAudioSpeed: 0.8,
+    speedIncrement: 0.25
 }
 
-// Audio reference for doll’s song
 let dollAudio = null
 
-// Start a new game session
 function startGame() {
     gameState.phase = 'greenLight'
     gameState.startTime = Date.now()
@@ -34,7 +32,6 @@ function startGame() {
     gameState.won = false
     gameState.roundNumber = 0
 
-    // Start first song quickly after 1 second
     setTimeout(() => {
         if (gameState.phase === 'greenLight') {
             playSongAndTurn()
@@ -42,11 +39,9 @@ function startGame() {
     }, 50)
 }
 
-// Schedule the next doll song after a random wait
 function scheduleNextSong() {
     if (gameState.phase === 'ended') return
 
-    // Decrease wait time as rounds progress, min 500ms
     const baseWait = 1500
     const waitReduction = Math.min(gameState.roundNumber * 150, 1000)
     const waitTime = Math.max(500, baseWait - waitReduction + Math.random() * 500)
@@ -58,9 +53,7 @@ function scheduleNextSong() {
     }, waitTime)
 }
 
-// Play the doll’s song, then switch to red light when it ends
 function playSongAndTurn() {
-    // Exponentially increase playback speed with rounds
     const playbackRate = timings.initialAudioSpeed * Math.pow(1.3, gameState.roundNumber)
 
     try {
@@ -68,12 +61,10 @@ function playSongAndTurn() {
         dollAudio.volume = 0.5
         dollAudio.playbackRate = Math.min(3.0, Math.max(0.5, playbackRate))
 
-        // When the song finishes, trigger red light
         dollAudio.addEventListener('ended', () => {
             startRedLight()
         })
 
-        // If audio fails, fallback to red light after 2s
         dollAudio.addEventListener('error', () => {
             setTimeout(() => startRedLight(), 2000)
         })
@@ -86,14 +77,13 @@ function playSongAndTurn() {
     }
 }
 
-// Switch to red light phase
 function startRedLight() {
     gameState.phase = 'redLight'
     gameState.phaseStartTime = Date.now()
     gameState.dollTurning = true
-    gameState.roundNumber++     // Increase round difficulty
+    gameState.turnStartTime = Date.now()
+    gameState.roundNumber++
 
-    // Red light duration shortens each round (min 1.5s)
     const redDuration = Math.max(1500, timings.redLightDuration - (gameState.roundNumber * 100))
 
     setTimeout(() => {
@@ -103,23 +93,20 @@ function startRedLight() {
     }, redDuration)
 }
 
-// Switch back to green light phase
 function startGreenLight() {
     gameState.phase = 'greenLight'
     gameState.phaseStartTime = Date.now()
     gameState.dollTurning = true
+    gameState.turnStartTime = Date.now()
     scheduleNextSong()
 }
 
-// Check if player moved illegally during red light
 function checkMovement(currentPosition) {
-    // Always allowed during green light
     if (gameState.phase === 'greenLight') {
         gameState.lastPlayerPosition = { x: currentPosition.x, z: currentPosition.z }
         return false
     }
 
-    // During red light, check if doll has finished turning
     if (gameState.phase === 'redLight' && !gameState.dollTurning) {
         const dx = currentPosition.x - gameState.lastPlayerPosition.x
         const dz = currentPosition.z - gameState.lastPlayerPosition.z
@@ -130,7 +117,6 @@ function checkMovement(currentPosition) {
         const movementThreshold = 0.03
 
         if (distance > movementThreshold) {
-            // Player caught moving → eliminated
             gameState.eliminated = true
             gameState.phase = 'ended'
             if (dollAudio) {
@@ -140,40 +126,44 @@ function checkMovement(currentPosition) {
             return true
         }
     } else {
-        // Just update position tracking
         gameState.lastPlayerPosition = { x: currentPosition.x, z: currentPosition.z }
     }
 
     return false
 }
 
-// Smoothly rotate doll depending on phase
 function updateDoll(doll, deltaTime) {
-    if (!gameState.dollTurning) return
-
-    const targetRotation = gameState.phase === 'greenLight' ? Math.PI : 0
-    const currentRotation = doll.rotation.y
-    const diff = targetRotation - currentRotation
-
-    if (Math.abs(diff) > 0.01) {
-        doll.rotation.y += diff * timings.turnSpeed * deltaTime
-    } else {
-        doll.rotation.y = targetRotation
-        gameState.dollTurning = false
+    if (!doll || !doll.userData.model) return
+    
+    const model = doll.userData.model
+    
+    if (gameState.dollTurning) {
+        const elapsed = (Date.now() - gameState.turnStartTime) / 1000
+        const progress = Math.min(elapsed / gameState.turnDuration, 1)
+        
+        const easeProgress = progress < 0.5
+            ? 2 * progress * progress
+            : 1 - Math.pow(-2 * progress + 2, 2) / 2
+        
+        const startRotation = gameState.phase === 'redLight' ? 0 : Math.PI
+        const endRotation = gameState.phase === 'redLight' ? Math.PI : 0
+        
+        model.rotation.y = startRotation + (endRotation - startRotation) * easeProgress
+        
+        if (progress >= 1) {
+            gameState.dollTurning = false
+        }
     }
 }
 
-
-// Check if player has crossed finish line
 function checkWinCondition(playerZ) {
     const finishZ = -GameConfig.field.depth * GameConfig.finishLine.zRatio + GameConfig.finishLine.zOffset
-    const buffer = 1.5  // small buffer so player fully passes finish line
+    const buffer = 1.5
 
     if (playerZ <= finishZ - buffer && !gameState.won) {
         gameState.won = true
         gameState.phase = 'ended'
 
-        // Stop doll audio if playing
         if (dollAudio) {
             dollAudio.pause()
             dollAudio = null
@@ -183,7 +173,6 @@ function checkWinCondition(playerZ) {
     return false
 }
 
-// Check if the game timed out
 function checkTimeout() {
     if (Date.now() - gameState.startTime > timings.gameTimeout) {
         gameState.phase = 'ended'
@@ -196,18 +185,17 @@ function checkTimeout() {
     return false
 }
 
-// restart the game
 function resetGame() {
     gameState.phase = 'waiting'
     gameState.startTime = 0
     gameState.phaseStartTime = 0
     gameState.dollTurning = false
+    gameState.turnStartTime = 0
     gameState.lastPlayerPosition = { x: 0, z: 0 }
     gameState.eliminated = false
     gameState.won = false
     gameState.roundNumber = 0
     
-    // Stop any playing audio
     if (dollAudio) {
         dollAudio.pause()
         dollAudio = null

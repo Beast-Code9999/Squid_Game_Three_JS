@@ -6,7 +6,7 @@ import { Renderer } from './core/renderer.js'
 import { Camera } from './core/camera.js'
 import { Player } from './game/player.js'
 import { Playground } from './game/playground.js'
-import { Doll } from './game/doll.js'
+import { DollModel } from './game/DollModel.js'
 import { keys, setupControls, getMovementVector } from './core/controls.js'
 import { 
     gameState, 
@@ -29,6 +29,8 @@ import { createReadyUI } from './ui/ReadyUI.js'
 import { transitionToTugOfWar } from './game/levelTransition.js'
 import { createRLGLInstructions } from './ui/InstructionsUI.js'
 import { removeTugReadyUI } from './ui/TugReadyUI.js'
+import { createTugPlayer, animateTugPlayer } from './game/tugofwar/TugPlayer.js'
+import { createProgressUI, updateProgressUI, setPlayerNames, removeProgressUI } from './game/tugofwar/ProgressUI.js'
 
 // Create camera and renderer
 const camera = Camera()
@@ -36,25 +38,53 @@ const renderer = Renderer()
 
 // Current level tracking
 let currentLevel = 'rlgl'
+window.currentLevel = currentLevel
+
+// Tug of War state
+let tugPlayers = {
+    left: null,
+    right: null
+}
+let tugScene = null
+let localPlayerProgress = 0
+let opponentProgress = 0
 
 // Add walls
 const walls = Walls()
 scene.add(walls)
 
-// Add lights
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
+// Add lights - IMPROVED LIGHTING SYSTEM
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.7) // Brighter ambient
 scene.add(ambientLight)
 
-const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8)
-directionalLight.position.set(50, 100, 50)
-directionalLight.castShadow = true
-directionalLight.shadow.camera.left = -100
-directionalLight.shadow.camera.right = 100
-directionalLight.shadow.camera.top = 100
-directionalLight.shadow.camera.bottom = -100
-directionalLight.shadow.mapSize.width = 2048
-directionalLight.shadow.mapSize.height = 2048
-scene.add(directionalLight)
+// Main sun light (directional)
+const sunLight = new THREE.DirectionalLight(0xfff4e6, 1.2) // Warm sunlight
+sunLight.position.set(100, 150, 50)
+sunLight.castShadow = true
+
+// Better shadow quality
+sunLight.shadow.mapSize.width = 4096  // Higher resolution
+sunLight.shadow.mapSize.height = 4096
+sunLight.shadow.camera.left = -150
+sunLight.shadow.camera.right = 150
+sunLight.shadow.camera.top = 150
+sunLight.shadow.camera.bottom = -150
+sunLight.shadow.camera.near = 0.5
+sunLight.shadow.camera.far = 500
+sunLight.shadow.bias = -0.0001
+
+scene.add(sunLight)
+
+// Fill light from opposite side (softer shadows)
+const fillLight = new THREE.DirectionalLight(0x87CEEB, 0.4) // Sky blue fill
+fillLight.position.set(-80, 100, -50)
+fillLight.castShadow = false // No shadows from fill light
+scene.add(fillLight)
+
+// Hemisphere light for natural ambient (sky + ground bounce)
+const hemiLight = new THREE.HemisphereLight(0x87CEEB, 0xd4a574, 0.5)
+hemiLight.position.set(0, 50, 0)
+scene.add(hemiLight)
 
 // Add playground
 const playground = Playground()
@@ -86,7 +116,56 @@ networkManager.onAllPlayersReadyTug = () => {
     
     setTimeout(() => {
         currentLevel = 'tug'
+        window.currentLevel = 'tug'
+        
+        // Import the scene setup function
+        import('./core/scene.js').then(sceneModule => {
+            sceneModule.setupTugScene()
+        })
+        
         transitionToTugOfWar(scene, player, walls, playground, doll, timer, bots, camera, networkManager)
+        
+        setTimeout(() => {
+            const sceneChildren = scene.children
+            tugScene = null
+            
+            for (let i = sceneChildren.length - 1; i >= 0; i--) {
+                if (sceneChildren[i].userData && sceneChildren[i].userData.rope) {
+                    tugScene = sceneChildren[i]
+                    break
+                }
+            }
+            
+            if (!tugScene) {
+                console.error('Could not find tug scene!')
+                return
+            }
+            
+            const platformHeight = tugScene.userData.platformHeight || 40
+            const platformThickness = 2
+            const platformTopY = platformHeight + (platformThickness / 2)
+            const playerY = platformTopY + 2
+
+            if (!tugPlayers.left) {
+                tugPlayers.left = createTugPlayer(0x4ecdc4, 'You', 'left')
+                tugPlayers.left.userData.baseY = playerY
+                tugPlayers.left.position.set(-40, playerY, 0)
+                scene.add(tugPlayers.left)
+            }
+
+            if (!tugPlayers.right) {
+                const opponents = Array.from(networkManager.players.values()).filter(p => !p.eliminated)
+                const opponentName = opponents.length > 0 ? opponents[0].name : 'Opponent'
+                
+                tugPlayers.right = createTugPlayer(0xff6b6b, opponentName, 'right')
+                tugPlayers.right.userData.baseY = playerY
+                tugPlayers.right.position.set(40, playerY, 0)
+                scene.add(tugPlayers.right)
+
+                createProgressUI()
+                setPlayerNames('You', opponentName)
+            }
+        }, 200)
     }, 1000)
 }
 
@@ -109,6 +188,9 @@ networkManager.onTugRaceStart = (data) => {
 
 networkManager.onRaceProgress = (data) => {
     console.log(`Player ${data.playerId} is at ${data.percentage.toFixed(1)}%`)
+    
+    opponentProgress = data.percentage
+    updateProgressUI(localPlayerProgress, opponentProgress)
 }
 
 networkManager.onPlayerFinished = (data) => {
@@ -118,9 +200,31 @@ networkManager.onPlayerFinished = (data) => {
 networkManager.onTugRaceEnd = (data) => {
     console.log('Race ended! Winner:', data.winner.name)
     
+    const isWinner = data.winner.playerId === networkManager.playerId
+    
+    animateWinnerPullLoser(isWinner)
+    
     setTimeout(() => {
-        alert(`🏆 WINNER: ${data.winner.name}\n⏱️ Time: ${data.winner.time.toFixed(2)}s\n⚡ WPM: ${data.winner.wpm}\n\n${data.eliminatedCount} players eliminated`)
-    }, 1000)
+        import('./game/tugofwar/EndGameUI.js').then(ui => {
+            const loserData = {
+                name: isWinner ? 
+                    (Array.from(networkManager.players.values())[0]?.name || 'Opponent') : 
+                    'You',
+                playerId: isWinner ? data.winner.playerId : networkManager.playerId
+            }
+            
+            ui.createEndGameUI(
+                isWinner,
+                data.winner,
+                loserData,
+                {
+                    eliminatedCount: data.eliminatedCount || 0
+                }
+            )
+        })
+        
+        removeProgressUI()
+    }, 3500)
 }
 
 networkManager.onTugReadyUpdate = (data) => {
@@ -144,57 +248,54 @@ networkManager.onTugTypingStart = () => {
     }
 }
 
-// Store network players
 const networkPlayers = new Map()
 
-// Position sync variables
 let lastSentPosition = { x: 0, y: 0, z: 0 }
 let lastSentRotation = { x: 0, y: 0, z: 0 }
 const POSITION_THRESHOLD = 0.1
 
-// Ready system
 const readyUI = createReadyUI()
 let isReady = false
 let gameStartedFromNetwork = false
 let hasShownInstructions = false
 
-// Create and add doll
-const doll = Doll()
+// Create doll with async loading
+const doll = new THREE.Group()
 doll.position.set(0, 0, -GameConfig.field.depth * GameConfig.doll.zRatio - 40)
 doll.rotation.y = Math.PI
 scene.add(doll)
 
-// Add timer
+// Load the 3D model into the doll group
+DollModel((loadedDollGroup) => {
+    const model = loadedDollGroup.userData.model
+    doll.add(model)
+    doll.userData.model = model
+    console.log('✅ Doll integrated into scene')
+})
+
 const timer = TimerDisplay()
 timer.position.set(0, 10, -GameConfig.field.depth * GameConfig.timer.zRatio - 65)
 scene.add(timer)
 
-// Create camera rig
 const cameraRig = new THREE.Object3D()
 player.add(cameraRig)
 cameraRig.position.set(0, 1.6, 0)
 cameraRig.add(camera)
 camera.position.set(0, 0, 0)
 
-// Create the UI
 const gameUI = new GameUI3D(scene, camera)
 
-// Setup FPS controls
 setupControls(camera, player)
 
-// Movement settings
 const moveSpeed = 70.5
 const sprintMultiplier = 1.2
 
-// Time tracking
 let previousTime = performance.now()
 
-// Show instructions immediately on load
 createRLGLInstructions().then(() => {
     hasShownInstructions = true
 })
 
-// Setup ready button
 readyUI.readyButton.addEventListener('click', () => {
   if (!hasShownInstructions) return
   
@@ -211,7 +312,6 @@ readyUI.readyButton.addEventListener('click', () => {
   }
 })
 
-// Setup network callbacks
 networkManager.onReadyUpdate = (data) => {
   readyUI.readyStatus.textContent = `${data.totalReady}/${data.totalPlayers} players ready`
   
@@ -246,7 +346,6 @@ networkManager.onGameStart = (data) => {
   gameState.startTime = data.startTime
 }
 
-// Create bots
 const bots = []
 for (let i = 0; i < 15; i++) {
     const bot = Bot(`Bot ${i+1}`, 1 + Math.random() * 0.5)
@@ -254,7 +353,42 @@ for (let i = 0; i < 15; i++) {
     bots.push(bot)
 }
 
-// Animation loop
+function animateWinnerPullLoser(isWinner) {
+    const winner = isWinner ? tugPlayers.left : tugPlayers.right
+    const loser = isWinner ? tugPlayers.right : tugPlayers.left
+    const rope = tugScene ? tugScene.userData.rope : null
+    
+    if (!winner || !loser) return
+    
+    const platformHeight = tugScene && tugScene.userData.platformHeight ? tugScene.userData.platformHeight : 40
+    const baseY = winner.userData.baseY || 43
+    
+    let animationProgress = 0
+    const animationDuration = 3
+    
+    const animateInterval = setInterval(() => {
+        animationProgress += 0.016
+        const progress = Math.min(animationProgress / animationDuration, 1)
+        
+        const targetX = 0
+        loser.position.x += (targetX - loser.position.x) * 0.05
+        
+        if (rope) {
+            const ropeTarget = isWinner ? -10 : 10
+            rope.position.x += (ropeTarget - rope.position.x) * 0.05
+        }
+        
+        loser.rotation.z = progress * (isWinner ? -1.5 : 1.5)
+        loser.position.y = Math.max(-20, baseY - progress * 63)
+        
+        winner.rotation.z = (isWinner ? -0.5 : 0.5) * (1 + progress * 0.5)
+        
+        if (progress >= 1) {
+            clearInterval(animateInterval)
+        }
+    }, 16)
+}
+
 function animate() {
     requestAnimationFrame(animate)
     
@@ -262,7 +396,6 @@ function animate() {
     const deltaTime = (currentTime - previousTime) / 1000
     previousTime = currentTime
     
-    // Only update RLGL elements if we're in RLGL
     if (currentLevel === 'rlgl') {
         updateDoll(doll, deltaTime)
 
@@ -272,7 +405,6 @@ function animate() {
         })
     }
 
-    // Update network players (only in RLGL, hide in Tug of War)
     if (currentLevel === 'rlgl') {
         networkManager.players.forEach((playerData, playerId) => {
             if (!networkPlayers.has(playerId)) {
@@ -315,9 +447,25 @@ function animate() {
         networkPlayers.forEach((playerMesh) => {
             playerMesh.visible = false
         })
+        
+        if (tugPlayers.left && tugPlayers.right && tugScene && 
+            tugPlayers.left.userData.baseY !== undefined && 
+            tugPlayers.right.userData.baseY !== undefined) {
+            
+            const pullDifference = localPlayerProgress - opponentProgress
+            const normalizedPull = Math.max(-1, Math.min(1, pullDifference / 50))
+            
+            animateTugPlayer(tugPlayers.left, deltaTime, normalizedPull)
+            animateTugPlayer(tugPlayers.right, deltaTime, -normalizedPull)
+            
+            if (tugScene.userData.rope) {
+                const rope = tugScene.userData.rope
+                const targetX = normalizedPull * 5
+                rope.position.x += (targetX - rope.position.x) * 0.1
+            }
+        }
     }
 
-    // Update timer (only for RLGL)
     if (currentLevel === 'rlgl' && gameState.phase !== 'ended' && gameState.phase !== 'waiting' && gameState.phase !== 'waiting-for-players') {
         const timeElapsed = (Date.now() - gameState.startTime) / 1000
         const timeRemaining = Math.max(0, 45 - timeElapsed)
@@ -330,7 +478,6 @@ function animate() {
         }
     }
     
-    // Handle movement only in RLGL (and not if waiting for players)
     if (currentLevel === 'rlgl' && gameState.phase !== 'ended' && gameState.phase !== 'waiting' && gameState.phase !== 'waiting-for-players') {
         const speed = keys.shift ? moveSpeed * sprintMultiplier : moveSpeed
         const movement = getMovementVector(player, speed, deltaTime)
@@ -375,50 +522,23 @@ function animate() {
         checkTimeout()
     }
     
-    // Visual feedback for game state
-    if (currentLevel === 'rlgl' && gameState.phase === 'ended') {
-        if (gameState.won) {
-            scene.background = new THREE.Color(0xffd700)
-            scene.fog = new THREE.Fog(0xffd700, 50, 200)
-        } else if (gameState.eliminated) {
-            scene.background = new THREE.Color(0x8b0000)
-            scene.fog = new THREE.Fog(0x8b0000, 30, 150)
-        } else {
-            scene.background = new THREE.Color(0x666666)
-            scene.fog = new THREE.Fog(0x666666, 50, 200)
-        }
-    } else if (currentLevel === 'rlgl') {
-        if (gameState.phase === 'redLight' && !gameState.dollTurning) {
-            scene.background = new THREE.Color(0xffaaaa)
-            scene.fog = new THREE.Fog(0xffaaaa, 80, 300)
-        } else if (gameState.phase === 'greenLight' && !gameState.dollTurning) {
-            scene.background = new THREE.Color(0x87CEEB)
-            scene.fog = new THREE.Fog(0x87CEEB, 100, 500)
-        } else {
-            scene.background = new THREE.Color(0xddddaa)
-            scene.fog = new THREE.Fog(0xddddaa, 90, 400)
-        }
-    }
-    
     renderer.render(scene, camera)
 }
 
-// Handle window resize
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight
     camera.updateProjectionMatrix()
     renderer.setSize(window.innerWidth, window.innerHeight)
 })
 
-// Debug key
 window.addEventListener('keydown', (e) => {
     if (e.key === 'T') {
         currentLevel = 'tug'
+        window.currentLevel = 'tug'
         transitionToTugOfWar(scene, player, walls, playground, doll, timer, bots, camera, networkManager)
     }
 })
 
-// Waiting overlay UI
 let waitingOverlay = null
 
 function showWaitingOverlay(completed, total) {
@@ -464,3 +584,8 @@ function hideWaitingOverlay() {
 }
 
 animate()
+
+window.updateTugProgress = (localProgress) => {
+    localPlayerProgress = localProgress
+    updateProgressUI(localPlayerProgress, opponentProgress)
+}

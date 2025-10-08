@@ -2,7 +2,6 @@
 import * as THREE from 'three'
 
 // Object to keep track of pressed keys
-// (true = pressed, false = not pressed)
 const keys = {
     w: false,
     a: false,
@@ -22,9 +21,11 @@ let yawObject = null   // Controls left/right look
 function setupPointerLock() {
     const canvas = document.getElementById('game')
     
-    // Clicking the canvas requests pointer lock
+    // Clicking the canvas requests pointer lock (only in RLGL)
     canvas.addEventListener('click', () => {
-        canvas.requestPointerLock()
+        if (window.currentLevel !== 'tug') {
+            canvas.requestPointerLock()
+        }
     })
     
     // Listen for pointer lock changes
@@ -42,6 +43,9 @@ function setupPointerLock() {
 // Handle mouse movement to rotate the camera/player
 function onMouseMove(event) {
     if (!pitchObject || !yawObject) return
+    
+    // Don't allow camera movement in Tug of War
+    if (window.currentLevel === 'tug') return
     
     // Get movement deltas from mouse
     const movementX = event.movementX || 0
@@ -110,7 +114,7 @@ function getMovementVector(player, speed, deltaTime) {
     if (keys.d) movement.add(right)   // Move right
     if (keys.a) movement.sub(right)   // Move left
     
-    // If moving, normalize so diagonal isn’t faster,
+    // If moving, normalize so diagonal isn't faster,
     // then apply speed and deltaTime for smooth movement
     if (movement.length() > 0) {
         movement.normalize()
@@ -148,8 +152,6 @@ function applyHeadBob(camera, isMoving, isRunning, deltaTime) {
     // Roll: slight head tilt with the sway
     camera.rotation.z = Math.sin(bobbingTime * 2) * tiltAmount
 }
-
-
 
 // Export so other files can use these
 export { keys, setupControls, getMovementVector, applyHeadBob }

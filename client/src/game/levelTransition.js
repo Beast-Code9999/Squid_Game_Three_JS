@@ -7,7 +7,7 @@ import { createTugReadyUI } from '../ui/TugReadyUI.js'
 
 let sceneElements = []
 let originalCameraParent = null
-let tugScene = null
+let tugSceneObject = null
 let hasShownTugInstructions = false
 let hasCreatedTugUI = false
 
@@ -23,6 +23,11 @@ function clearRLGLElements(scene, walls, playground, doll, timer, bots) {
 }
 
 async function transitionToTugOfWar(scene, player, walls, playground, doll, timer, bots, camera, networkManager) {
+    // Exit pointer lock
+    if (document.pointerLockElement) {
+        document.exitPointerLock()
+    }
+    
     // Prevent duplicate UI creation
     if (hasCreatedTugUI) {
         console.log('Tug of War UI already created, skipping...')
@@ -36,24 +41,23 @@ async function transitionToTugOfWar(scene, player, walls, playground, doll, time
     originalCameraParent = camera.parent
     if (originalCameraParent) {
         originalCameraParent.remove(camera)
+        scene.add(camera)
     }
     
-    // Set fixed camera position looking at the platforms
-    camera.position.set(0, 35, 30)
-    camera.lookAt(0, 0, 0)
+    // Set camera to look at platforms at the right height
+    camera.position.set(0, 45, 70)
+    camera.lookAt(0, 42, 0)
     
     // Hide player model
     player.visible = false
     
     // Load Tug of War scene
-    tugScene = createTugOfWarScene()
-    scene.add(tugScene)
+    tugSceneObject = createTugOfWarScene()
+    scene.add(tugSceneObject)
     
-    sceneElements = [tugScene]
+    sceneElements = [tugSceneObject]
     
-    // Change scene atmosphere
-    scene.background = new THREE.Color(0x333333)
-    scene.fog = new THREE.Fog(0x333333, 10, 100)
+    // DON'T set background/fog here - it's handled in scene.js
     
     // Show instructions only once
     if (!hasShownTugInstructions) {

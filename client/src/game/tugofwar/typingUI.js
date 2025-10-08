@@ -144,12 +144,10 @@ function handleKeyDown(e) {
         const targetWord = words[currentWordIndex]
         
         if (typed === targetWord) {
-            // CORRECT - Move to next word
             completedWords.push(targetWord)
             currentWordIndex++
             inputField.value = ''
             
-            // Send progress to server
             const percentage = (currentWordIndex / words.length) * 100
             const elapsed = (Date.now() - startTime) / 1000
             const wpm = Math.round((currentWordIndex / elapsed) * 60)
@@ -158,30 +156,31 @@ function handleKeyDown(e) {
                 networkManager.sendTypingProgress(currentWordIndex, percentage, wpm)
             }
             
+            // Update local progress UI
+            if (window.updateTugProgress) {
+                window.updateTugProgress(percentage)
+            }
+            
             if (currentWordIndex >= words.length) {
                 completeTyping()
             } else {
                 updateDisplay()
             }
         } else {
-            // WRONG - Show error and let them retry
             inputField.style.borderColor = '#ff6b6b'
             inputField.style.backgroundColor = 'rgba(255, 0, 0, 0.2)'
             
-            // Shake animation
             inputField.style.animation = 'shake 0.3s'
             setTimeout(() => {
                 inputField.style.animation = ''
             }, 300)
             
-            // Reset after a moment
             setTimeout(() => {
                 inputField.style.borderColor = '#4ecdc4'
                 inputField.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'
             }, 800)
         }
     } else if (e.key === 'Backspace') {
-        // Allow backspace normally
         return
     }
 }
@@ -191,10 +190,8 @@ function handleTypingInput(e) {
     const targetWord = words[currentWordIndex]
     if (!targetWord) return
     
-    // Check if what they've typed so far matches the beginning of the target word
     const isCorrectSoFar = targetWord.startsWith(typed)
     
-    // Update border color based on correctness
     if (typed.length === 0) {
         inputField.style.borderColor = '#4ecdc4'
         inputField.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'
@@ -206,18 +203,15 @@ function handleTypingInput(e) {
         inputField.style.backgroundColor = 'rgba(255, 107, 107, 0.1)'
     }
     
-    // Update the current word display with color-coded letters
     let display = ''
     for (let i = 0; i < targetWord.length; i++) {
         if (i < typed.length) {
-            // Show what they've typed so far
             if (typed[i] === targetWord[i]) {
                 display += `<span style="color: #4ecdc4">${targetWord[i]}</span>`
             } else {
                 display += `<span style="color: #ff6b6b">${targetWord[i]}</span>`
             }
         } else {
-            // Show remaining letters in white
             display += `<span style="color: white">${targetWord[i]}</span>`
         }
     }
@@ -256,14 +250,12 @@ function startTyping(paragraph) {
 
     currentParagraph = paragraph.trim()
 
-    // Split into words
     displayWords = currentParagraph
         .replace(/\s+/g, ' ')
         .split(' ')
         .filter(w => w.length > 0)
 
-    // FIXED: Don't strip punctuation - keep words exactly as they appear
-    words = displayWords.slice() // Just copy the array
+    words = displayWords.slice()
 
     currentWordIndex = 0
     completedWords = []
@@ -284,9 +276,13 @@ function completeTyping() {
     inputField.disabled = true
     currentWordDisplay.innerHTML = '<span style="color: #4ecdc4">COMPLETED!</span>'
     
-    // Send completion to server
     if (networkManager) {
         networkManager.sendTypingComplete(timeTaken, wpm)
+    }
+    
+    // Update local progress to 100%
+    if (window.updateTugProgress) {
+        window.updateTugProgress(100)
     }
     
     if (onCompleteCallback) {
