@@ -31,6 +31,7 @@ import { createRLGLInstructions } from './ui/InstructionsUI.js'
 import { removeTugReadyUI } from './ui/TugReadyUI.js'
 import { createTugPlayer, animateTugPlayer } from './game/tugofwar/TugPlayer.js'
 import { createProgressUI, updateProgressUI, setPlayerNames, removeProgressUI } from './game/tugofwar/ProgressUI.js'
+import { createRLGLDefeatedUI, createRLGLVictoryUI } from './ui/RLGLEndGameUI.js'
 
 // Create camera and renderer
 const camera = Camera()
@@ -54,16 +55,14 @@ const walls = Walls()
 scene.add(walls)
 
 // Add lights - IMPROVED LIGHTING SYSTEM
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.7) // Brighter ambient
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.7)
 scene.add(ambientLight)
 
-// Main sun light (directional)
-const sunLight = new THREE.DirectionalLight(0xfff4e6, 1.2) // Warm sunlight
+const sunLight = new THREE.DirectionalLight(0xfff4e6, 1.2)
 sunLight.position.set(100, 150, 50)
 sunLight.castShadow = true
 
-// Better shadow quality
-sunLight.shadow.mapSize.width = 4096  // Higher resolution
+sunLight.shadow.mapSize.width = 4096
 sunLight.shadow.mapSize.height = 4096
 sunLight.shadow.camera.left = -150
 sunLight.shadow.camera.right = 150
@@ -72,16 +71,13 @@ sunLight.shadow.camera.bottom = -150
 sunLight.shadow.camera.near = 0.5
 sunLight.shadow.camera.far = 500
 sunLight.shadow.bias = -0.0001
-
 scene.add(sunLight)
 
-// Fill light from opposite side (softer shadows)
-const fillLight = new THREE.DirectionalLight(0x87CEEB, 0.4) // Sky blue fill
+const fillLight = new THREE.DirectionalLight(0x87CEEB, 0.4)
 fillLight.position.set(-80, 100, -50)
-fillLight.castShadow = false // No shadows from fill light
+fillLight.castShadow = false
 scene.add(fillLight)
 
-// Hemisphere light for natural ambient (sky + ground bounce)
 const hemiLight = new THREE.HemisphereLight(0x87CEEB, 0xd4a574, 0.5)
 hemiLight.position.set(0, 50, 0)
 scene.add(hemiLight)
@@ -98,6 +94,9 @@ scene.add(player)
 // Network setup
 const networkManager = new NetworkManager()
 networkManager.connect()
+
+// Track if local player finished RLGL
+let localPlayerFinishedRLGL = false
 
 // RLGL Completion tracking
 networkManager.onWaitForPlayers = (data) => {
@@ -118,7 +117,6 @@ networkManager.onAllPlayersReadyTug = () => {
         currentLevel = 'tug'
         window.currentLevel = 'tug'
         
-        // Import the scene setup function
         import('./core/scene.js').then(sceneModule => {
             sceneModule.setupTugScene()
         })
@@ -145,14 +143,14 @@ networkManager.onAllPlayersReadyTug = () => {
             const platformThickness = 2
             const platformTopY = platformHeight + (platformThickness / 2)
             const playerY = platformTopY + 2
-
+            
             if (!tugPlayers.left) {
                 tugPlayers.left = createTugPlayer(0x4ecdc4, 'You', 'left')
                 tugPlayers.left.userData.baseY = playerY
                 tugPlayers.left.position.set(-40, playerY, 0)
                 scene.add(tugPlayers.left)
             }
-
+            
             if (!tugPlayers.right) {
                 const opponents = Array.from(networkManager.players.values()).filter(p => !p.eliminated)
                 const opponentName = opponents.length > 0 ? opponents[0].name : 'Opponent'
@@ -161,7 +159,7 @@ networkManager.onAllPlayersReadyTug = () => {
                 tugPlayers.right.userData.baseY = playerY
                 tugPlayers.right.position.set(40, playerY, 0)
                 scene.add(tugPlayers.right)
-
+                
                 createProgressUI()
                 setPlayerNames('You', opponentName)
             }
@@ -249,7 +247,6 @@ networkManager.onTugTypingStart = () => {
 }
 
 const networkPlayers = new Map()
-
 let lastSentPosition = { x: 0, y: 0, z: 0 }
 let lastSentRotation = { x: 0, y: 0, z: 0 }
 const POSITION_THRESHOLD = 0.1
@@ -265,7 +262,6 @@ doll.position.set(0, 0, -GameConfig.field.depth * GameConfig.doll.zRatio - 40)
 doll.rotation.y = Math.PI
 scene.add(doll)
 
-// Load the 3D model into the doll group
 DollModel((loadedDollGroup) => {
     const model = loadedDollGroup.userData.model
     doll.add(model)
@@ -289,7 +285,6 @@ setupControls(camera, player)
 
 const moveSpeed = 70.5
 const sprintMultiplier = 1.2
-
 let previousTime = performance.now()
 
 createRLGLInstructions().then(() => {
@@ -297,53 +292,53 @@ createRLGLInstructions().then(() => {
 })
 
 readyUI.readyButton.addEventListener('click', () => {
-  if (!hasShownInstructions) return
-  
-  isReady = !isReady
-  
-  if (isReady) {
-    networkManager.sendReady()
-    readyUI.readyButton.textContent = 'NOT READY'
-    readyUI.readyButton.style.background = '#ff6b6b'
-  } else {
-    networkManager.sendNotReady()
-    readyUI.readyButton.textContent = 'READY'
-    readyUI.readyButton.style.background = '#4ecdc4'
-  }
+    if (!hasShownInstructions) return
+    
+    isReady = !isReady
+    
+    if (isReady) {
+        networkManager.sendReady()
+        readyUI.readyButton.textContent = 'NOT READY'
+        readyUI.readyButton.style.background = '#ff6b6b'
+    } else {
+        networkManager.sendNotReady()
+        readyUI.readyButton.textContent = 'READY'
+        readyUI.readyButton.style.background = '#4ecdc4'
+    }
 })
 
 networkManager.onReadyUpdate = (data) => {
-  readyUI.readyStatus.textContent = `${data.totalReady}/${data.totalPlayers} players ready`
-  
-  if (data.totalPlayers < 2) {
-    readyUI.readyStatus.textContent += ' (Need at least 2 players)'
-  }
+    readyUI.readyStatus.textContent = `${data.totalReady}/${data.totalPlayers} players ready`
+    
+    if (data.totalPlayers < 2) {
+        readyUI.readyStatus.textContent += ' (Need at least 2 players)'
+    }
 }
 
 networkManager.onCountdown = (count) => {
-  if (count > 0) {
-    readyUI.countdownDisplay.style.display = 'block'
-    readyUI.countdownDisplay.textContent = count
-    readyUI.countdownDisplay.style.animation = 'none'
-    setTimeout(() => {
-      readyUI.countdownDisplay.style.animation = 'pulse 1s ease-in-out'
-    }, 10)
-    readyUI.container.style.display = 'none'
-  } else {
-    readyUI.countdownDisplay.textContent = 'GO!'
-    setTimeout(() => {
-      readyUI.countdownDisplay.style.display = 'none'
-    }, 500)
-  }
+    if (count > 0) {
+        readyUI.countdownDisplay.style.display = 'block'
+        readyUI.countdownDisplay.textContent = count
+        readyUI.countdownDisplay.style.animation = 'none'
+        setTimeout(() => {
+            readyUI.countdownDisplay.style.animation = 'pulse 1s ease-in-out'
+        }, 10)
+        readyUI.container.style.display = 'none'
+    } else {
+        readyUI.countdownDisplay.textContent = 'GO!'
+        setTimeout(() => {
+            readyUI.countdownDisplay.style.display = 'none'
+        }, 500)
+    }
 }
 
 networkManager.onGameStart = (data) => {
-  gameUI.hideStartPanel()
-  readyUI.container.style.display = 'none'
-  
-  gameStartedFromNetwork = true
-  startGame()
-  gameState.startTime = data.startTime
+    gameUI.hideStartPanel()
+    readyUI.container.style.display = 'none'
+    
+    gameStartedFromNetwork = true
+    startGame()
+    gameState.startTime = data.startTime
 }
 
 const bots = []
@@ -398,13 +393,13 @@ function animate() {
     
     if (currentLevel === 'rlgl') {
         updateDoll(doll, deltaTime)
-
+        
         const finishZ = -GameConfig.field.depth * GameConfig.finishLine.zRatio + GameConfig.finishLine.zOffset
         bots.forEach(bot => {
             updateBot(bot, deltaTime, finishZ, gameState)
         })
     }
-
+    
     if (currentLevel === 'rlgl') {
         networkManager.players.forEach((playerData, playerId) => {
             if (!networkPlayers.has(playerId)) {
@@ -436,7 +431,7 @@ function animate() {
                 }
             }
         })
-
+        
         networkPlayers.forEach((playerMesh, playerId) => {
             if (!networkManager.players.has(playerId)) {
                 scene.remove(playerMesh)
@@ -465,23 +460,26 @@ function animate() {
             }
         }
     }
-
+    
     if (currentLevel === 'rlgl' && gameState.phase !== 'ended' && gameState.phase !== 'waiting' && gameState.phase !== 'waiting-for-players') {
         const timeElapsed = (Date.now() - gameState.startTime) / 1000
         const timeRemaining = Math.max(0, 45 - timeElapsed)
         updateTimerDisplay(timer, timeRemaining)
-
+        
         if (timeRemaining <= 0 && gameState.phase !== 'ended') {
             gameState.phase = 'ended'
             gameState.won = false
             gameState.eliminated = false
+            
+            // Show defeated popup for timeout
+            createRLGLDefeatedUI()
         }
     }
     
     if (currentLevel === 'rlgl' && gameState.phase !== 'ended' && gameState.phase !== 'waiting' && gameState.phase !== 'waiting-for-players') {
         const speed = keys.shift ? moveSpeed * sprintMultiplier : moveSpeed
         const movement = getMovementVector(player, speed, deltaTime)
-
+        
         const newPosition = {
             x: player.position.x + movement.x,
             y: player.position.y + movement.y,
@@ -490,11 +488,11 @@ function animate() {
         
         const clampedPosition = checkBoundaries(newPosition, walls.userData.boundaries)
         player.position.set(clampedPosition.x, clampedPosition.y, clampedPosition.z)
-
+        
         const isMoving = keys.w || keys.a || keys.s || keys.d
         const isRunning = keys.shift
         applyHeadBob(camera, isMoving, isRunning, deltaTime)
-
+        
         const positionChanged = 
             Math.abs(player.position.x - lastSentPosition.x) > POSITION_THRESHOLD ||
             Math.abs(player.position.y - lastSentPosition.y) > POSITION_THRESHOLD ||
@@ -509,14 +507,23 @@ function animate() {
             lastSentRotation = { ...player.rotation }
         }
         
+        // Check if player moved during red light
         if (checkMovement(player.position)) {
             networkManager.sendEliminated()
+            
+            // Show defeated popup immediately
+            createRLGLDefeatedUI()
         }
         
+        // Check if player reached finish line
         if (checkWinCondition(player.position.z)) {
             networkManager.sendLevelComplete('rlgl')
             gameState.phase = 'waiting-for-players'
+            localPlayerFinishedRLGL = true
             console.log('Finished RLGL! Waiting for other players...')
+            
+            // Show victory popup
+            createRLGLVictoryUI()
         }
         
         checkTimeout()

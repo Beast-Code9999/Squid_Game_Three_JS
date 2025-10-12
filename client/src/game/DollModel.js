@@ -14,10 +14,10 @@ function DollModel(onLoad) {
             const model = gltf.scene
             
             // Scale
-            model.scale.set(25, 25, 25)
+            model.scale.set(17, 17, 17)
             
             // Position
-            model.position.y = 12
+            model.position.y = 8.5
             
             // Enable shadows and BRIGHTEN materials
             model.traverse((child) => {
