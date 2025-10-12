@@ -119,7 +119,7 @@ function updateBot(bot, deltaTime, finishZ, gameState) {
     
     if (gameState.phase === 'greenLight' && !gameState.dollTurning) {
         bot.userData.isMoving = true
-        const speed = 8 * bot.userData.speedMultiplier
+        const speed = 7 * bot.userData.speedMultiplier
         bot.position.z -= speed * deltaTime
         
         // Increase animation time for running

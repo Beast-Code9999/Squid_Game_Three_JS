@@ -283,7 +283,7 @@ const gameUI = new GameUI3D(scene, camera)
 
 setupControls(camera, player)
 
-const moveSpeed = 70.5
+const moveSpeed = 7.5
 const sprintMultiplier = 1.2
 let previousTime = performance.now()
 
