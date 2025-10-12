@@ -266,7 +266,7 @@ DollModel((loadedDollGroup) => {
     const model = loadedDollGroup.userData.model
     doll.add(model)
     doll.userData.model = model
-    console.log('✅ Doll integrated into scene')
+    console.log('Doll integrated into scene')
 })
 
 const timer = TimerDisplay()
